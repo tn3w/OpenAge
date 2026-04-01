@@ -32,7 +32,7 @@ jobs:
       - name: Upload static demo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./static
+          path: ./demo
 
       - name: Deploy
         id: deployment

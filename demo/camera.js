@@ -17,7 +17,10 @@ export async function startCamera(video) {
     return new Promise((resolve) => {
         video.onloadedmetadata = () => {
             video.play();
-            resolve({ width: video.videoWidth, height: video.videoHeight });
+            resolve({
+                width: video.videoWidth,
+                height: video.videoHeight,
+            });
         };
     });
 }

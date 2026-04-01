@@ -1,9 +1,11 @@
-import { getFaceApiModelUrl } from './model-store.js';
+import { getFaceApiModelUrl, installCacheInterceptor } from './model-store.js';
 
 let initialized = false;
 
 export async function initAgeEstimator() {
     if (initialized) return;
+
+    installCacheInterceptor();
 
     const modelUrl = getFaceApiModelUrl();
 
@@ -18,7 +20,12 @@ export async function initAgeEstimator() {
 
 export async function estimateAge(canvas) {
     const detection = await faceapi
-        .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 }))
+        .detectSingleFace(
+            canvas,
+            new faceapi.TinyFaceDetectorOptions({
+                inputSize: 224,
+            })
+        )
         .withFaceLandmarks(true)
         .withAgeAndGender();
 

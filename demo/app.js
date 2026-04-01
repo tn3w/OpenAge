@@ -1,52 +1,37 @@
 import { startCamera, captureFrame, stopCamera, checkFrameQuality } from './camera.js';
-import {
-    ensureModels,
-    getMediaPipeModelBuffer,
-    clearCache,
-    installCacheInterceptor,
-} from './model-store.js';
+import { ensureModels, getMediaPipeModelBuffer, clearCache } from './model-store.js';
 import { initTracker, track, destroyTracker } from './face-tracker.js';
 import {
-    createSession,
-    loadVM,
-    setFaceData,
-    setChallengeParams,
-    executeChallenge,
-    openTransport,
-    getFirstChallenge,
-    submitVerification,
-    destroyVM,
-    getSession,
-    registerBridge,
-    unregisterBridge,
-} from './vm-client.js';
+    createLivenessSession,
+    processFrame,
+    isLivenessComplete,
+    currentInstruction,
+    currentTaskId,
+    progress,
+} from './liveness.js';
+import { initAgeEstimator, estimateAgeBurst } from './age-estimator.js';
+import { decide } from './policy.js';
 
 const MAX_RETRIES = 3;
+const BURST_FRAMES = 5;
+const BURST_INTERVAL_MS = 200;
 const POSITION_CHECK_MS = 100;
-const MOTION_CAPTURE_MS = 3000;
-const MOTION_SAMPLE_MS = 100;
-
-const TASK_INSTRUCTIONS = {
-    'turn-left': 'Turn your head to the left',
-    'turn-right': 'Turn your head to the right',
-    nod: 'Nod your head down then up',
-    'blink-twice': 'Blink twice',
-    'move-closer': 'Move closer then back',
-};
 
 const State = {
     LOADING: 'LOADING',
     READY: 'READY',
     CAMERA: 'CAMERA',
     POSITIONING: 'POSITIONING',
-    CHALLENGE: 'CHALLENGE',
+    LIVENESS: 'LIVENESS',
+    ESTIMATING: 'ESTIMATING',
     RESULT: 'RESULT',
 };
 
 const elements = {};
 let state = State.LOADING;
 let retryCount = 0;
-let lastCapturedFrame = null;
+let livenessSession = null;
+let animationFrameId = null;
 
 function $(id) {
     return document.getElementById(id);
@@ -81,6 +66,18 @@ function init() {
 
 async function loadModels() {
     try {
+        setStatus('Loading models…');
+        await ensureModels((p) => {
+            setStatus(`Loading models… ${Math.round(p * 100)}%`);
+        });
+
+        setStatus('Initializing age estimator…');
+        await initAgeEstimator();
+
+        setStatus('Initializing face tracker…');
+        const modelBuffer = await getMediaPipeModelBuffer();
+        await initTracker(modelBuffer);
+
         transition(State.READY);
     } catch (error) {
         setStatus(`Setup failed: ${error.message}`);
@@ -108,8 +105,8 @@ function transition(newState) {
 
         case State.CAMERA:
             elements.hero.classList.remove('hidden');
-            setStatus('Setting up secure session…');
-            startSecureFlow();
+            setStatus('Requesting camera access…');
+            startCameraFlow();
             break;
 
         case State.POSITIONING:
@@ -119,60 +116,33 @@ function transition(newState) {
             startPositioning();
             break;
 
-        case State.CHALLENGE:
+        case State.LIVENESS:
             elements.videoContainer.classList.remove('hidden');
             elements.faceGuide.classList.remove('hidden');
             elements.challengeHud.classList.remove('hidden');
             elements.videoStatus.classList.remove('hidden');
-            runChallengeRounds();
+            livenessSession = createLivenessSession();
+            updateChallengeUI();
+            startLivenessLoop();
+            break;
+
+        case State.ESTIMATING:
+            elements.videoContainer.classList.remove('hidden');
+            elements.videoStatus.classList.remove('hidden');
+            setVideoStatus('Estimating age…');
+            runAgeEstimation();
             break;
     }
 }
 
-async function startSecureFlow() {
+async function startCameraFlow() {
     try {
-        setStatus('Creating secure session…');
-        await createSession();
-
-        setStatus('Loading WASM VM…');
-        await loadVM();
-
-        setStatus('Decrypting AI models…');
-        installCacheInterceptor();
-        await ensureModels((progress) => {
-            setStatus(`Decrypting models… ` + `${Math.round(progress * 100)}%`);
-        });
-
-        setStatus('Initializing face tracker…');
-        const buf = await getMediaPipeModelBuffer();
-        await initTracker(buf);
-
-        registerBridge({
-            trackFace: () => {
-                const result = track(elements.video, performance.now());
-                if (!result) return 'null';
-                return JSON.stringify({
-                    ts: Math.round(performance.now()),
-                    faceCount: result.faceCount,
-                    headPose: result.headPose || null,
-                    blendshapes: result.blendshapes || null,
-                    boundingBox: result.boundingBox || null,
-                });
-            },
-            captureFrame: () => {
-                lastCapturedFrame = captureFrame();
-                return lastCapturedFrame ? 'true' : 'null';
-            },
-        });
-
-        setStatus('Requesting camera…');
         await startCamera(elements.video);
         elements.overlay.width = elements.video.videoWidth;
         elements.overlay.height = elements.video.videoHeight;
-
         transition(State.POSITIONING);
-    } catch (error) {
-        showResult('unsupported', `Session setup failed: ${error.message}`);
+    } catch {
+        showResult('unsupported', 'Camera access denied or unavailable.');
     }
 }
 
@@ -204,7 +174,7 @@ function startPositioning() {
         }
 
         if (stableFrames >= 10) {
-            transition(State.CHALLENGE);
+            transition(State.LIVENESS);
             return;
         }
 
@@ -213,126 +183,87 @@ function startPositioning() {
     check();
 }
 
-async function runChallengeRounds() {
-    const session = getSession();
-    const totalRounds = session.rounds;
+function startLivenessLoop() {
+    const loop = () => {
+        if (state !== State.LIVENESS) return;
 
-    openTransport();
-    let challenge = await getFirstChallenge();
+        const timestampMs = performance.now();
+        processFrame(livenessSession, elements.video, timestampMs);
 
-    for (let round = 0; round < totalRounds; round++) {
-        if (!challenge) {
-            showResult('fail', 'Connection lost.');
-            return;
-        }
-        if (challenge.type === 'verdict') {
-            handleVerdict(challenge.verdict);
-            return;
-        }
-        if (challenge.type === 'timeout') {
-            showResult('fail', 'Session timed out.');
+        if (livenessSession.failed) {
+            setVideoStatus(livenessSession.failReason);
+            handleLivenessFail();
             return;
         }
 
-        setVideoStatus(`Round ${round + 1} of ${totalRounds}…`);
-
-        const instruction = TASK_INSTRUCTIONS[challenge.task] ?? 'Look at the camera';
-
-        elements.challengeText.textContent = instruction;
-        elements.faceGuide.setAttribute('data-task', challenge.task);
-        updateProgress(round, totalRounds);
-
-        const faceData = await captureMotionAndAge(challenge.task);
-
-        setFaceData(faceData);
-        setChallengeParams({
-            nonce: challenge.token.nonce,
-            round: challenge.round,
-            task: challenge.task,
-        });
-
-        let vmResponse;
-        try {
-            vmResponse = executeChallenge();
-        } catch (error) {
-            showResult('fail', `VM execution failed: ${error.message}`);
-            destroyVM();
+        if (isLivenessComplete(livenessSession)) {
+            transition(State.ESTIMATING);
             return;
         }
 
-        const result = await submitVerification(
-            challenge.token,
-            challenge.tokenSignature,
-            vmResponse
-        );
-
-        if (result.complete) {
-            handleVerdict(result.verdict);
-            return;
-        }
-
-        if (!result.accepted) {
-            setVideoStatus(`Round error: ${result.error}`);
-            await sleep(1000);
-        }
-
-        challenge = result.nextChallenge;
-    }
-}
-
-async function captureMotionAndAge(task) {
-    const motionHistory = [];
-    const startTime = performance.now();
-
-    while (performance.now() - startTime < MOTION_CAPTURE_MS) {
-        const timestamp = performance.now();
-        const tracking = track(elements.video, timestamp);
-
-        if (tracking && tracking.faceCount === 1) {
-            motionHistory.push({
-                ts: Math.round(timestamp),
-                headPose: tracking.headPose,
-                blendshapes: tracking.blendshapes,
-                boundingBox: tracking.boundingBox,
-            });
-        }
-
-        await sleep(MOTION_SAMPLE_MS);
-    }
-
-    const lastTracking = motionHistory.length > 0 ? motionHistory[motionHistory.length - 1] : null;
-
-    return {
-        facePresent: motionHistory.length > 0,
-        faceCount: lastTracking ? 1 : 0,
-        headPose: lastTracking?.headPose ?? null,
-        blendshapes: lastTracking?.blendshapes ?? null,
-        motionHistory,
-        task,
+        updateChallengeUI();
+        animationFrameId = requestAnimationFrame(loop);
     };
+
+    animationFrameId = requestAnimationFrame(loop);
 }
 
-function updateProgress(current, total) {
-    const fraction = current / total;
+function updateChallengeUI() {
+    const instruction = currentInstruction(livenessSession);
+    elements.challengeText.textContent = instruction ?? 'Done!';
+
+    const taskId = currentTaskId(livenessSession);
+    elements.faceGuide.setAttribute('data-task', taskId ?? '');
+
+    const prog = progress(livenessSession);
     elements.challengeProgress.innerHTML =
-        `<div class="bar" ` + `style="width:${fraction * 100}%"></div>`;
+        `<div class="bar" ` + `style="width:${prog * 100}%"></div>`;
+
+    setVideoStatus(
+        `Challenge ` + `${livenessSession.currentIndex + 1}` + ` of ${livenessSession.tasks.length}`
+    );
 }
 
-function handleVerdict(verdict) {
-    destroyVM();
-    switch (verdict.outcome) {
+async function runAgeEstimation() {
+    const frames = [];
+
+    for (let i = 0; i < BURST_FRAMES; i++) {
+        const frame = captureFrame();
+        if (frame) frames.push(frame);
+        if (i < BURST_FRAMES - 1) {
+            await sleep(BURST_INTERVAL_MS);
+        }
+    }
+
+    if (frames.length === 0) {
+        handleLivenessFail();
+        return;
+    }
+
+    const ageResults = await estimateAgeBurst(frames);
+    const decision = decide(ageResults);
+
+    switch (decision.outcome) {
         case 'pass':
             showResult('pass', 'Age verified. You may proceed.');
             break;
-        case 'fail':
-            showResult('fail', 'Unable to verify. Try again later.');
-            break;
         case 'retry':
+        case 'fail':
             handleRetryDecision();
             break;
-        default:
-            showResult('fail', 'Verification inconclusive.');
     }
+}
+
+function handleLivenessFail() {
+    retryCount++;
+    if (retryCount >= MAX_RETRIES) {
+        showResult('fail', 'Unable to verify. Try again later.');
+        return;
+    }
+    showResult(
+        'retry',
+        `Verification unsuccessful. ` + `${MAX_RETRIES - retryCount} attempt(s) left.`
+    );
 }
 
 function handleRetryDecision() {
@@ -345,9 +276,10 @@ function handleRetryDecision() {
 }
 
 function showResult(type, message) {
+    cancelAnimationFrame(animationFrameId);
     stopCamera();
     destroyTracker();
-    unregisterBridge();
+
     state = State.RESULT;
 
     elements.hero.classList.add('hidden');
@@ -372,14 +304,14 @@ function onStart() {
 }
 
 async function onRetry() {
-    setStatus('Reinitializing…');
+    setStatus('Reinitializing tracker…');
+    const modelBuffer = await getMediaPipeModelBuffer();
+    await initTracker(modelBuffer);
     transition(State.CAMERA);
 }
 
 async function onClear() {
     await clearCache();
-    destroyVM();
-    unregisterBridge();
     stopCamera();
     destroyTracker();
     elements.hero.classList.remove('hidden');
