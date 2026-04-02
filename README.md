@@ -89,9 +89,10 @@ The result flows directly from C inference to QuickJS bytecode validation — br
 5. **VM execution** — bytecode calls `__vm_infer_age()` five times (burst inference matching the demo's approach), computes trimmed mean, reads pre-collected motion data via `__vm_get_face_data()`, validates liveness, applies age policy, detects spoofing
 6. **Sealed response** — VM derives ephemeral keys via XOR-unmask, encrypts (ChaCha20), signs (HMAC-SHA256), wipes keys from stack
 7. **Dual validation** — server validates liveness independently AND checks the VM's liveness result; both must pass with identical thresholds; round number and integrity field verified
-8. **Verdict** — after all rounds, server computes the trimmed mean age,
-   applies a `-2` adjustment, and returns pass (≥ 18), fail (< 15), or
-   retry (15–18)
+8. **Verdict** — after all 3 rounds, the server requires `liveness_ok = true`
+   in at least 2 rounds, computes the trimmed-mean scorer output, sets
+   `estimatedAge = scorerOutput - 2`, and keeps the pass threshold at 18;
+   verdicts are pass (≥ 18), fail (< 15), or retry (15–18)
 
 ### Key Rotation
 
@@ -130,8 +131,10 @@ Old builds retained for active sessions (max 3 concurrent).
 3. **Camera** — requests front camera, checks lighting/blur
 4. **Positioning** — confirms one face is visible and stable via MediaPipe
 5. **Challenge rounds** — 3 rounds: each challenge arrives inline from the previous verify response (or via WebSocket push / initial poll) → collects motion over 3s → VM runs `__vm_infer_age()` on live video frame (C inference) → validates liveness from motion data → applies age policy → encrypts + signs response → server re-validates
-6. **Decision** — server computes the trimmed mean, applies a `-2`
-   adjustment, then returns pass (≥ 18), retry (15–18), or fail (< 15)
+6. **Decision** — the server runs 3 rounds, needs `liveness_ok = true` in at
+   least 2 of them, computes the trimmed mean scorer output, sets
+   `estimatedAge = scorerOutput - 2`, and keeps the pass threshold at 18;
+   outcomes are pass (≥ 18), retry (15–18), or fail (< 15)
 
 ## File Structure
 
@@ -261,9 +264,10 @@ The `demo/` directory contains a standalone browser-only version deployed to Git
 Result screens in both clients include the estimated age for age-based pass,
 retry, and fail outcomes, and explain why a verification did not pass.
 
-Both versions use the same policy: trimmed-mean age estimation with a `-2`
-adjustment, pass at estimated age 18+, fail below 15, retry between 15 and 18,
-and 2 of 3 liveness checks required.
+Both versions use the same policy: 3 verification rounds total, at least 2
+rounds must end with `liveness_ok = true`, and `estimatedAge` is the trimmed
+mean scorer output minus 2. The pass threshold itself stays at 18; fail is
+below 15 and retry is between 15 and 18.
 
 |                | Full (static/)                              | Demo (demo/)                  |
 | -------------- | ------------------------------------------- | ----------------------------- |
@@ -292,15 +296,15 @@ The demo is not tamper-resistant — it exists to showcase the UX flow.
 
 ## Configuration
 
-| Setting               | Default                  | Location                                            |
-| --------------------- | ------------------------ | --------------------------------------------------- |
-| Port                  | 8000                     | `PORT` env var                                      |
-| WASM rebuild interval | 10 min                   | `REBUILD_INTERVAL` in server.py                     |
-| Challenge rounds      | 3                        | `MAX_ROUNDS` in server.py                           |
-| Challenge TTL         | 60s                      | `CHALLENGE_TTL` in server.py                        |
-| Session TTL           | 5 min                    | `SESSION_TTL` in server.py                          |
-| Age threshold         | 18 after `-2` adjustment | `compute_verdict()` in server.py / `demo/policy.js` |
-| Transport             | auto-negotiate           | WebSocket preferred, poll fallback                  |
+| Setting               | Default        | Location                                            |
+| --------------------- | -------------- | --------------------------------------------------- |
+| Port                  | 8000           | `PORT` env var                                      |
+| WASM rebuild interval | 10 min         | `REBUILD_INTERVAL` in server.py                     |
+| Challenge rounds      | 3              | `MAX_ROUNDS` in server.py                           |
+| Challenge TTL         | 60s            | `CHALLENGE_TTL` in server.py                        |
+| Session TTL           | 5 min          | `SESSION_TTL` in server.py                          |
+| Age threshold         | 18             | `compute_verdict()` in server.py / `demo/policy.js` |
+| Transport             | auto-negotiate | WebSocket preferred, poll fallback                  |
 
 ## Browser Support
 

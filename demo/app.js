@@ -308,7 +308,7 @@ function formatEstimatedAge(age) {
 function buildEstimatedAgeText(age, ageAdjustment = 0) {
     const adjustmentText =
         Number.isFinite(ageAdjustment) && ageAdjustment > 0
-            ? ` after the -${ageAdjustment} adjustment`
+            ? ` (scorer result - ${ageAdjustment})`
             : '';
 
     return `Estimated age: ${formatEstimatedAge(age)}${adjustmentText}.`;

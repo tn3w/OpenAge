@@ -331,14 +331,15 @@ def compute_verdict(results):
 
     if estimated_age < FAIL_FLOOR:
         reason = (
-            f"Production passes at {AGE_THRESHOLD}+ after applying the "
-            f"-{AGE_ADJUSTMENT} adjustment and values below {FAIL_FLOOR} fail"
+            f"Pass threshold stays at {AGE_THRESHOLD}. Estimated age is the "
+            f"scorer result minus {AGE_ADJUSTMENT}, and values below "
+            f"{FAIL_FLOOR} fail"
         )
         return build_verdict("fail", estimated_age, reason, raw_estimated_age)
 
     reason = (
-        f"Production passes at {AGE_THRESHOLD}+ after applying the "
-        f"-{AGE_ADJUSTMENT} adjustment"
+        f"Pass threshold stays at {AGE_THRESHOLD}. Estimated age is the "
+        f"scorer result minus {AGE_ADJUSTMENT}"
     )
     return build_verdict("retry", estimated_age, reason, raw_estimated_age)
 

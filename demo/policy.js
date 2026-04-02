@@ -42,8 +42,9 @@ export function decide(ageResults, threshold = DEFAULT_THRESHOLD) {
             ageAdjustment: AGE_ADJUSTMENT,
             passThreshold: threshold,
             reason:
-                `Demo passes at ${threshold}+ after applying the -${AGE_ADJUSTMENT} ` +
-                `adjustment and values below ${FAIL_FLOOR} fail`,
+                `Pass threshold stays at ${threshold}. Estimated age is the ` +
+                `scorer result minus ${AGE_ADJUSTMENT}, and values below ` +
+                `${FAIL_FLOOR} fail`,
         };
     }
 
@@ -54,6 +55,8 @@ export function decide(ageResults, threshold = DEFAULT_THRESHOLD) {
         confidence: 0.5,
         ageAdjustment: AGE_ADJUSTMENT,
         passThreshold: threshold,
-        reason: `Demo passes at ${threshold}+ after applying the -${AGE_ADJUSTMENT} adjustment`,
+        reason:
+            `Pass threshold stays at ${threshold}. Estimated age is the ` +
+            `scorer result minus ${AGE_ADJUSTMENT}`,
     };
 }
