@@ -56,6 +56,8 @@ export function processFrame(session, video, timestampMs) {
     const result = track(video, timestampMs);
     if (!result || result.faceCount === 0) return session;
 
+    const frameTimestampMs = result.timestampMs ?? timestampMs;
+
     if (result.faceCount > 1) {
         session.failed = true;
         session.failReason = 'Multiple faces detected';
@@ -63,19 +65,19 @@ export function processFrame(session, video, timestampMs) {
     }
 
     const entry = {
-        timestamp: timestampMs,
+        timestamp: frameTimestampMs,
         headPose: result.headPose,
         blendshapes: result.blendshapes,
         boundingBox: result.boundingBox,
     };
 
     if (session.history.length === 0) {
-        session.taskStartTime = timestampMs;
+        session.taskStartTime = frameTimestampMs;
     }
 
     session.history.push(entry);
 
-    const elapsed = timestampMs - session.taskStartTime;
+    const elapsed = frameTimestampMs - session.taskStartTime;
 
     if (elapsed > TASK_TIMEOUT_MS) {
         session.failed = true;
@@ -98,7 +100,7 @@ export function processFrame(session, video, timestampMs) {
         session.completedTasks++;
         session.currentIndex++;
         session.history = [];
-        session.taskStartTime = timestampMs;
+        session.taskStartTime = frameTimestampMs;
     }
 
     return session;

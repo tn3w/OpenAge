@@ -2,6 +2,7 @@ const VISION_CDN = 'https://cdn.jsdelivr.net/npm/' + '@mediapipe/tasks-vision@0.
 
 let FaceLandmarker = null;
 let landmarker = null;
+let lastTimestampMs = -1;
 
 export async function initTracker(modelBuffer) {
     const vision = await import(
@@ -10,6 +11,11 @@ export async function initTracker(modelBuffer) {
 
     FaceLandmarker = vision.FaceLandmarker;
     const filesetResolver = await vision.FilesetResolver.forVisionTasks(VISION_CDN);
+
+    if (landmarker) {
+        landmarker.close();
+    }
+    lastTimestampMs = -1;
 
     landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
         baseOptions: {
@@ -26,10 +32,13 @@ export async function initTracker(modelBuffer) {
 export function track(video, timestampMs) {
     if (!landmarker) return null;
 
-    const result = landmarker.detectForVideo(video, timestampMs);
+    const normalizedTimestampMs = normalizeTimestampMs(timestampMs);
+    const result = landmarker.detectForVideo(video, normalizedTimestampMs);
     const faceCount = result.faceLandmarks?.length ?? 0;
 
-    if (faceCount === 0) return { faceCount: 0 };
+    if (faceCount === 0) {
+        return { faceCount: 0, timestampMs: normalizedTimestampMs };
+    }
 
     const landmarks = result.faceLandmarks[0];
     const blendshapes = parseBlendshapes(result.faceBlendshapes?.[0]);
@@ -38,6 +47,7 @@ export function track(video, timestampMs) {
 
     return {
         faceCount,
+        timestampMs: normalizedTimestampMs,
         landmarks,
         blendshapes,
         headPose,
@@ -50,6 +60,15 @@ export function destroyTracker() {
         landmarker.close();
         landmarker = null;
     }
+    lastTimestampMs = -1;
+}
+
+function normalizeTimestampMs(timestampMs) {
+    const safeTimestamp = Number.isFinite(timestampMs) ? timestampMs : performance.now();
+    const wholeMilliseconds = Math.floor(safeTimestamp);
+    const normalizedTimestampMs = Math.max(wholeMilliseconds, lastTimestampMs + 1);
+    lastTimestampMs = normalizedTimestampMs;
+    return normalizedTimestampMs;
 }
 
 function parseBlendshapes(blendshapeResult) {

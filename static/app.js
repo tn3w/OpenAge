@@ -152,7 +152,7 @@ async function startSecureFlow() {
                 const result = track(elements.video, performance.now());
                 if (!result) return 'null';
                 return JSON.stringify({
-                    ts: Math.round(performance.now()),
+                    ts: result.timestampMs ?? Math.round(performance.now()),
                     faceCount: result.faceCount,
                     headPose: result.headPose || null,
                     blendshapes: result.blendshapes || null,
@@ -285,12 +285,11 @@ async function captureMotionAndAge(task) {
     const startTime = performance.now();
 
     while (performance.now() - startTime < MOTION_CAPTURE_MS) {
-        const timestamp = performance.now();
-        const tracking = track(elements.video, timestamp);
+        const tracking = track(elements.video, performance.now());
 
         if (tracking && tracking.faceCount === 1) {
             motionHistory.push({
-                ts: Math.round(timestamp),
+                ts: tracking.timestampMs,
                 headPose: tracking.headPose,
                 blendshapes: tracking.blendshapes,
                 boundingBox: tracking.boundingBox,

@@ -298,6 +298,10 @@ The demo is not tamper-resistant — it exists to showcase the UX flow.
 
 Requires: getUserMedia, ES modules, WebGL (MediaPipe GPU delegate), WebAssembly. Works in current Chrome, Firefox, Edge, Safari.
 
+MediaPipe VIDEO-mode tracking normalizes every `detectForVideo()` call to a
+strictly increasing millisecond timestamp in both clients. This avoids packet
+timestamp mismatches in browsers that quantize high-resolution timers.
+
 ## Formatting
 
 ```bash
