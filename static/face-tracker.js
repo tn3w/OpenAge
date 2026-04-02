@@ -5,9 +5,8 @@ let landmarker = null;
 let lastTimestampMs = -1;
 
 export async function initTracker(modelBuffer) {
-    const vision = await import(
-        'https://cdn.jsdelivr.net/npm/' + '@mediapipe/tasks-vision@0.10.17/vision_bundle.mjs'
-    );
+    const vision =
+        await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/vision_bundle.mjs');
 
     FaceLandmarker = vision.FaceLandmarker;
     const filesetResolver = await vision.FilesetResolver.forVisionTasks(VISION_CDN);

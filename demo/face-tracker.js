@@ -1,13 +1,18 @@
-const VISION_CDN = 'https://cdn.jsdelivr.net/npm/' + '@mediapipe/tasks-vision@0.10.17/wasm';
+const VISION_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/wasm';
+const VISION_BUNDLE_URL =
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/' + 'vision_bundle.mjs';
 
 let FaceLandmarker = null;
 let landmarker = null;
 let lastTimestampMs = -1;
+let visionModulePromise = null;
+
+export function preloadVision() {
+    return loadVisionModule();
+}
 
 export async function initTracker(modelBuffer) {
-    const vision = await import(
-        'https://cdn.jsdelivr.net/npm/' + '@mediapipe/tasks-vision@0.10.17/' + 'vision_bundle.mjs'
-    );
+    const vision = await loadVisionModule();
 
     FaceLandmarker = vision.FaceLandmarker;
     const filesetResolver = await vision.FilesetResolver.forVisionTasks(VISION_CDN);
@@ -61,6 +66,17 @@ export function destroyTracker() {
         landmarker = null;
     }
     lastTimestampMs = -1;
+}
+
+function loadVisionModule() {
+    if (!visionModulePromise) {
+        visionModulePromise = import(VISION_BUNDLE_URL).catch((error) => {
+            visionModulePromise = null;
+            throw error;
+        });
+    }
+
+    return visionModulePromise;
 }
 
 function normalizeTimestampMs(timestampMs) {

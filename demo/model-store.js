@@ -1,7 +1,6 @@
 const CACHE_NAME = 'openage-models-v1';
 
-const FACE_API_BASE =
-    'https://cdn.jsdelivr.net/gh/' + 'justadudewhohacks/face-api.js@master/weights';
+const FACE_API_BASE = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
 
 const FACE_API_MODELS = [
     'tiny_face_detector_model-weights_manifest.json',
