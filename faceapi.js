@@ -24548,13 +24548,11 @@
                                 s = a.objectStore(nf),
                                 n = s.put({ modelPath: f.modelPath, modelArtifactsInfo: i });
                             ((n.onsuccess = function () {
-                                var n = (o = r.transaction(ef, 'readwrite'))
-                                    .objectStore(ef)
-                                    .put({
-                                        modelPath: f.modelPath,
-                                        modelArtifacts: h,
-                                        modelArtifactsInfo: i,
-                                    });
+                                var n = (o = r.transaction(ef, 'readwrite')).objectStore(ef).put({
+                                    modelPath: f.modelPath,
+                                    modelArtifacts: h,
+                                    modelArtifactsInfo: i,
+                                });
                                 ((n.onsuccess = function () {
                                     return u({ modelArtifactsInfo: i });
                                 }),
