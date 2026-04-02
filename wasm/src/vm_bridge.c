@@ -1,4 +1,5 @@
 #include <emscripten.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -59,6 +60,26 @@ static void set_last_js_error(const char *prefix) {
 	JS_FreeValue(g_ctx, exc);
 }
 
+static void parse_box_values(const char *arg, float *bx, float *by, float *bw,
+							 float *bh) {
+	float parsed_x;
+	float parsed_y;
+	float parsed_w;
+	float parsed_h;
+
+	if (!arg)
+		return;
+
+	if (sscanf(arg, "%f,%f,%f,%f", &parsed_x, &parsed_y, &parsed_w,
+			   &parsed_h) != 4)
+		return;
+
+	*bx = parsed_x;
+	*by = parsed_y;
+	*bw = parsed_w;
+	*bh = parsed_h;
+}
+
 static JSValue js_vm_ts(JSContext *ctx, JSValueConst this_val, int argc,
 						JSValueConst *argv) {
 	double t = EM_ASM_DOUBLE({ return Date.now(); });
@@ -97,6 +118,8 @@ static char *read_browser_global(const char *name) {
 			var str = JSON.stringify(obj);
 			var len = lengthBytesUTF8(str) + 1;
 			var ptr = _malloc(len);
+			if (!ptr)
+				return 0;
 			stringToUTF8(str, ptr, len);
 			return ptr;
 		},
@@ -133,6 +156,8 @@ static char *call_browser_fn(const char *fn_name, const char *arg) {
                 return 0;
             var len = lengthBytesUTF8(result) + 1;
             var ptr = _malloc(len);
+			if (!ptr)
+				return 0;
             stringToUTF8(result, ptr, len);
             return ptr;
         },
@@ -192,6 +217,13 @@ static void clamp_box(float *bx, float *by, float *bw, float *bh) {
 
 static int capture_video_frame(uint8_t **pixels, int *video_width,
 							   int *video_height) {
+	if (!pixels || !video_width || !video_height)
+		return 0;
+
+	*pixels = NULL;
+	*video_width = 0;
+	*video_height = 0;
+
 	int vw = EM_ASM_INT({
 		var v = document.querySelector('video');
 		return v ? v.videoWidth : 0;
@@ -203,24 +235,35 @@ static int capture_video_frame(uint8_t **pixels, int *video_width,
 
 	if (vw <= 0 || vh <= 0)
 		return 0;
+	if ((size_t)vw > ((size_t)INT_MAX / 4) / (size_t)vh)
+		return 0;
 
-	int size = vw * vh * 4;
-	uint8_t *buffer = (uint8_t *)malloc(size);
+	size_t frame_size = (size_t)vw * (size_t)vh * 4u;
+	uint8_t *buffer = (uint8_t *)malloc(frame_size);
 	if (!buffer)
 		return 0;
 
-	EM_ASM(
+	int copied = EM_ASM_INT(
 		{
 			var v = document.querySelector('video');
+			if (!v)
+				return 0;
 			var c = document.createElement('canvas');
 			c.width = $1;
 			c.height = $2;
 			var g = c.getContext('2d');
+			if (!g)
+				return 0;
 			g.drawImage(v, 0, 0, $1, $2);
 			var d = g.getImageData(0, 0, $1, $2);
 			HEAPU8.set(d.data, $0);
+			return 1;
 		},
 		buffer, vw, vh);
+	if (!copied) {
+		free(buffer);
+		return 0;
+	}
 
 	*pixels = buffer;
 	*video_width = vw;
@@ -311,7 +354,7 @@ static JSValue js_vm_check_frame_quality(JSContext *ctx, JSValueConst this_val,
 	if (argc > 0) {
 		const char *arg = JS_ToCString(ctx, argv[0]);
 		if (arg) {
-			sscanf(arg, "%f,%f,%f,%f", &bx, &by, &bw, &bh);
+			parse_box_values(arg, &bx, &by, &bw, &bh);
 			JS_FreeCString(ctx, arg);
 		}
 	}
@@ -359,7 +402,7 @@ static JSValue js_vm_infer_age(JSContext *ctx, JSValueConst this_val, int argc,
 	if (argc > 0) {
 		const char *arg = JS_ToCString(ctx, argv[0]);
 		if (arg) {
-			sscanf(arg, "%f,%f,%f,%f", &bx, &by, &bw, &bh);
+			parse_box_values(arg, &bx, &by, &bw, &bh);
 			JS_FreeCString(ctx, arg);
 		}
 	}
@@ -468,6 +511,9 @@ static void write_u32_le(uint8_t *out, uint32_t v) {
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t *vm_decrypt_blob(const uint8_t *input, int input_len, int *out_len) {
+	if (!input || !out_len)
+		return NULL;
+
 	*out_len = 0;
 
 	if (input_len < 20)
@@ -475,23 +521,29 @@ uint8_t *vm_decrypt_blob(const uint8_t *input, int input_len, int *out_len) {
 
 	uint32_t plain_len = read_u32_le(input);
 	uint32_t ct_len = read_u32_le(input + 4);
+	size_t header_len = 8u + NONCE_LEN;
 
-	if (input_len < (int)(8 + NONCE_LEN + ct_len))
+	if (plain_len != ct_len)
+		return NULL;
+	if ((size_t)ct_len > (size_t)input_len - header_len)
+		return NULL;
+	if (plain_len > (uint32_t)INT_MAX)
 		return NULL;
 
 	const uint8_t *nonce = input + 8;
 	const uint8_t *ct = input + 8 + NONCE_LEN;
 
-	uint8_t *out = (uint8_t *)malloc(plain_len);
+	size_t output_len = (size_t)plain_len;
+	uint8_t *out = (uint8_t *)malloc(output_len == 0 ? 1 : output_len);
 	if (!out)
 		return NULL;
 
 	uint8_t dk[32];
 	VM_DERIVE_KEY(VM_KEY_ID_DECRYPT, dk);
-	chacha20(out, ct, plain_len, dk, nonce, 1);
+	chacha20(out, ct, output_len, dk, nonce, 1);
 	wipe((volatile uint8_t *)dk, 32);
 
-	*out_len = (int)plain_len;
+	*out_len = (int)output_len;
 	return out;
 }
 
@@ -500,6 +552,12 @@ const char *vm_last_error(void) { return g_last_error; }
 
 static uint8_t *encrypt_and_sign(const char *str, size_t str_len,
 								 int *out_len) {
+	if (!str || !out_len)
+		return NULL;
+	if (str_len > SIZE_MAX - (8u + NONCE_LEN + MAC_LEN))
+		return NULL;
+
+	*out_len = 0;
 	uint8_t resp_nonce[NONCE_LEN];
 	double ts = EM_ASM_DOUBLE({ return Date.now(); });
 	uint64_t ts_u = (uint64_t)ts;
@@ -507,16 +565,26 @@ static uint8_t *encrypt_and_sign(const char *str, size_t str_len,
 	uint32_t ctr = antidbg_state();
 	memcpy(resp_nonce + 8, &ctr, 4);
 
-	uint8_t *resp_ct = (uint8_t *)malloc(str_len);
-	if (!resp_ct)
+	uint8_t *resp_ct = NULL;
+	if (str_len > 0) {
+		resp_ct = (uint8_t *)malloc(str_len);
+		if (!resp_ct)
+			return NULL;
+	}
+
+	if (str_len > 0) {
+		uint8_t ek[32];
+		VM_DERIVE_KEY(VM_KEY_ID_ENCRYPT, ek);
+		chacha20(resp_ct, (const uint8_t *)str, str_len, ek, resp_nonce, 1);
+		wipe((volatile uint8_t *)ek, 32);
+	}
+
+	size_t total = 8u + NONCE_LEN + str_len + MAC_LEN;
+	if (total > (size_t)INT_MAX) {
+		free(resp_ct);
 		return NULL;
+	}
 
-	uint8_t ek[32];
-	VM_DERIVE_KEY(VM_KEY_ID_ENCRYPT, ek);
-	chacha20(resp_ct, (const uint8_t *)str, str_len, ek, resp_nonce, 1);
-	wipe((volatile uint8_t *)ek, 32);
-
-	size_t total = 8 + NONCE_LEN + str_len + MAC_LEN;
 	uint8_t *resp = (uint8_t *)malloc(total);
 	if (!resp) {
 		free(resp_ct);
@@ -526,14 +594,19 @@ static uint8_t *encrypt_and_sign(const char *str, size_t str_len,
 	write_u32_le(resp, MAGIC_RESP);
 	write_u32_le(resp + 4, (uint32_t)total);
 	memcpy(resp + 8, resp_nonce, NONCE_LEN);
-	memcpy(resp + 8 + NONCE_LEN, resp_ct, str_len);
+	if (str_len > 0)
+		memcpy(resp + 8 + NONCE_LEN, resp_ct, str_len);
 	free(resp_ct);
 
 	uint8_t sk[32];
 	VM_DERIVE_KEY(VM_KEY_ID_SIGN, sk);
-	hmac_sha256(resp + 8 + NONCE_LEN + str_len, sk, 32, resp + 8,
-				NONCE_LEN + str_len);
+	int sign_result = hmac_sha256(resp + 8 + NONCE_LEN + str_len, sk, 32,
+								  resp + 8, NONCE_LEN + str_len);
 	wipe((volatile uint8_t *)sk, 32);
+	if (sign_result != 0) {
+		free(resp);
+		return NULL;
+	}
 
 	*out_len = (int)total;
 	return resp;
@@ -541,8 +614,19 @@ static uint8_t *encrypt_and_sign(const char *str, size_t str_len,
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t *vm_exec_bytecode(const uint8_t *bundle, int bundle_len, int *out_len) {
+	if (!out_len)
+		return NULL;
+
 	*out_len = 0;
 	set_last_error(NULL);
+	if (!bundle) {
+		set_last_error("bundle missing");
+		return NULL;
+	}
+	if (!g_rt || !g_ctx) {
+		set_last_error("vm not initialized");
+		return NULL;
+	}
 
 	antidbg_on_exec();
 	if (antidbg_check() != 0) {
@@ -562,7 +646,7 @@ uint8_t *vm_exec_bytecode(const uint8_t *bundle, int bundle_len, int *out_len) {
 	}
 
 	uint32_t bc_len = read_u32_le(bundle + 4);
-	if ((int)(8 + NONCE_LEN + bc_len) > bundle_len) {
+	if ((size_t)bc_len > (size_t)bundle_len - (8u + NONCE_LEN)) {
 		set_last_error("bundle length mismatch");
 		return NULL;
 	}
@@ -570,7 +654,7 @@ uint8_t *vm_exec_bytecode(const uint8_t *bundle, int bundle_len, int *out_len) {
 	const uint8_t *nonce_in = bundle + 8;
 	const uint8_t *ct_in = bundle + 8 + NONCE_LEN;
 
-	uint8_t *bc = (uint8_t *)malloc(bc_len);
+	uint8_t *bc = (uint8_t *)malloc(bc_len == 0 ? 1 : (size_t)bc_len);
 	if (!bc) {
 		set_last_error("bytecode allocation failed");
 		return NULL;
@@ -578,7 +662,7 @@ uint8_t *vm_exec_bytecode(const uint8_t *bundle, int bundle_len, int *out_len) {
 
 	uint8_t dk[32];
 	VM_DERIVE_KEY(VM_KEY_ID_DECRYPT, dk);
-	chacha20(bc, ct_in, bc_len, dk, nonce_in, 1);
+	chacha20(bc, ct_in, (size_t)bc_len, dk, nonce_in, 1);
 	wipe((volatile uint8_t *)dk, 32);
 
 	JSValue val = JS_ReadObject(g_ctx, bc, bc_len, JS_READ_OBJ_BYTECODE);

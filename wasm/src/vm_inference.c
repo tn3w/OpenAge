@@ -5,6 +5,7 @@
 
 #define IN AGE_INPUT
 #define MB AGE_MAXBUF
+#define AGE_MODEL_FLOAT_COUNT 421731
 
 static void conv2d_3x3(float *out, const float *in, const float *filt,
 					   const float *bias, int h, int w, int ci, int co,
@@ -256,6 +257,9 @@ static void preprocess(float *out, const uint8_t *rgba, int src_w, int src_h,
 	} while (0)
 
 int age_model_load(AgeModel *m, const float *data, int count) {
+	if (!m || !data || count < AGE_MODEL_FLOAT_COUNT)
+		return -1;
+
 	memset(m, 0, sizeof(*m));
 	const float *cursor = data;
 
@@ -335,6 +339,9 @@ int age_model_load(AgeModel *m, const float *data, int count) {
 }
 
 void age_model_free(AgeModel *m) {
+	if (!m)
+		return;
+
 	for (int i = 0; i < 4; i++) {
 		free(m->buf[i]);
 		m->buf[i] = NULL;
@@ -350,7 +357,9 @@ void age_model_free(AgeModel *m) {
 
 float age_model_infer(AgeModel *m, const uint8_t *rgba, int width, int height,
 					  float box_x, float box_y, float box_w, float box_h) {
-	if (!m->loaded)
+	if (!m || !rgba || width <= 0 || height <= 0 || !m->loaded)
+		return -1.0f;
+	if (!m->buf[0] || !m->buf[1] || !m->buf[2] || !m->buf[3])
 		return -1.0f;
 
 	float *input = (float *)malloc(IN * IN * 3 * sizeof(float));

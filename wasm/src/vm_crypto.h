@@ -9,8 +9,8 @@ void chacha20(uint8_t *out, const uint8_t *in, size_t len,
 
 void sha256(uint8_t out[32], const uint8_t *data, size_t len);
 
-void hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
-				 const uint8_t *msg, size_t msg_len);
+int hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
+				const uint8_t *msg, size_t msg_len);
 
 int ct_compare(const uint8_t *a, const uint8_t *b, size_t len);
 
