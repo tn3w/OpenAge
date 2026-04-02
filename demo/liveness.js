@@ -107,24 +107,26 @@ export function processFrame(session, video, timestampMs) {
 }
 
 export function isLivenessComplete(session) {
+    return session.currentIndex >= session.tasks.length;
+}
+
+export function isLivenessPassed(session) {
     return session.completedTasks >= session.requiredTaskPasses;
 }
 
 export function currentInstruction(session) {
-    if (isLivenessComplete(session)) return null;
     if (session.currentIndex >= session.tasks.length) return null;
     return session.tasks[session.currentIndex].instruction;
 }
 
 export function currentTaskId(session) {
-    if (isLivenessComplete(session)) return null;
     if (session.currentIndex >= session.tasks.length) return null;
     return session.tasks[session.currentIndex].id;
 }
 
 export function progress(session) {
-    if (session.requiredTaskPasses === 0) return 1;
-    return Math.min(session.completedTasks / session.requiredTaskPasses, 1);
+    if (session.tasks.length === 0) return 1;
+    return Math.min(session.currentIndex / session.tasks.length, 1);
 }
 
 function advanceTask(session) {

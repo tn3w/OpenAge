@@ -5,6 +5,7 @@ import {
     createLivenessSession,
     processFrame,
     isLivenessComplete,
+    isLivenessPassed,
     currentInstruction,
     currentTaskId,
     progress,
@@ -200,7 +201,15 @@ function startLivenessLoop() {
         }
 
         if (isLivenessComplete(livenessSession)) {
-            transition(State.ESTIMATING);
+            if (isLivenessPassed(livenessSession)) {
+                transition(State.ESTIMATING);
+            } else {
+                livenessSession.failed = true;
+                livenessSession.failReason =
+                    `Liveness incomplete. Completed ${livenessSession.completedTasks} of ` +
+                    `${livenessSession.requiredTaskPasses} required checks.`;
+                handleLivenessFail();
+            }
             return;
         }
 
@@ -223,8 +232,9 @@ function updateChallengeUI() {
         `<div class="bar" ` + `style="width:${prog * 100}%"></div>`;
 
     setVideoStatus(
-        `Complete ${livenessSession.completedTasks + 1} of ` +
-            `${livenessSession.requiredTaskPasses} required checks`
+        `Round ${Math.min(livenessSession.currentIndex + 1, livenessSession.tasks.length)} of ` +
+            `${livenessSession.tasks.length} — ` +
+            `${livenessSession.completedTasks}/${livenessSession.requiredTaskPasses} checks passed`
     );
 }
 
