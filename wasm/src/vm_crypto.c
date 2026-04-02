@@ -177,8 +177,15 @@ void sha256(uint8_t out[32], const uint8_t *data, size_t len) {
 		store32_be(out + 4 * j, h[j]);
 }
 
-void hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
-				 const uint8_t *msg, size_t msg_len) {
+int hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
+				const uint8_t *msg, size_t msg_len) {
+	if (!out)
+		return -1;
+	if ((key_len > 0 && !key) || (msg_len > 0 && !msg))
+		return -1;
+	if (msg_len > SIZE_MAX - 64)
+		return -1;
+
 	uint8_t kpad[64];
 	uint8_t tk[32];
 
@@ -188,7 +195,8 @@ void hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
 		key_len = 32;
 	}
 	memset(kpad, 0, 64);
-	memcpy(kpad, key, key_len);
+	if (key_len > 0)
+		memcpy(kpad, key, key_len);
 
 	uint8_t ipad[64];
 	for (int i = 0; i < 64; i++)
@@ -196,8 +204,11 @@ void hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
 
 	size_t ilen = 64 + msg_len;
 	uint8_t *ibuf = (uint8_t *)malloc(ilen);
+	if (!ibuf)
+		return -1;
 	memcpy(ibuf, ipad, 64);
-	memcpy(ibuf + 64, msg, msg_len);
+	if (msg_len > 0)
+		memcpy(ibuf + 64, msg, msg_len);
 
 	uint8_t ihash[32];
 	sha256(ihash, ibuf, ilen);
@@ -209,6 +220,7 @@ void hmac_sha256(uint8_t out[32], const uint8_t *key, size_t key_len,
 	memcpy(obuf + 64, ihash, 32);
 
 	sha256(out, obuf, 96);
+	return 0;
 }
 
 int ct_compare(const uint8_t *a, const uint8_t *b, size_t len) {
