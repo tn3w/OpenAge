@@ -248,11 +248,11 @@ async function runAgeEstimation() {
 
     switch (decision.outcome) {
         case 'pass':
-            showResult('pass', 'Age verified. You may proceed.');
+            showResult('pass', buildAgeResultMessage('Age verified. You may proceed.', decision));
             break;
         case 'retry':
         case 'fail':
-            handleRetryDecision();
+            handleRetryDecision(decision);
             break;
     }
 }
@@ -269,13 +269,31 @@ function handleLivenessFail() {
     );
 }
 
-function handleRetryDecision() {
+function handleRetryDecision(decision = null) {
     retryCount++;
     if (retryCount >= MAX_RETRIES) {
-        showResult('fail', 'Unable to verify. Try again later.');
+        showResult('fail', buildAgeResultMessage('Unable to verify. Try again later.', decision));
         return;
     }
-    showResult('retry', `Could not confirm age. ` + `${MAX_RETRIES - retryCount} attempt(s) left.`);
+    showResult(
+        'retry',
+        buildAgeResultMessage(
+            `Could not confirm age. ${MAX_RETRIES - retryCount} attempt(s) left.`,
+            decision
+        )
+    );
+}
+
+function buildAgeResultMessage(baseMessage, decision) {
+    if (!Number.isFinite(decision?.estimatedAge)) {
+        return baseMessage;
+    }
+
+    return `${baseMessage} Estimated age: ${formatEstimatedAge(decision.estimatedAge)}.`;
+}
+
+function formatEstimatedAge(age) {
+    return age.toFixed(1).replace(/\.0$/, '');
 }
 
 function showResult(type, message) {

@@ -255,6 +255,9 @@ Returns `{"accepted": true, "complete": false, "round": 1, "nextChallenge": {...
 
 The `demo/` directory contains a standalone browser-only version deployed to GitHub Pages. It uses the same UI but replaces the WASM VM pipeline with client-side face-api.js age estimation and local liveness checks. No server required — all models load from CDN and cache in the browser.
 
+Demo result screens include the locally estimated age for age-based pass, retry,
+and fail outcomes.
+
 Both versions use identical validation logic: same liveness thresholds (yaw > 20°, nod > 15°, blink > 0.6, distance > 1.3×), same age policy (pass ≥ 21, fail < 15), same burst estimation with trimmed mean, and same suspicious motion detection. The only difference is where the AI model runs.
 
 |                | Full (static/)                              | Demo (demo/)                  |
