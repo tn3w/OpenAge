@@ -241,7 +241,6 @@ async function runAgeEstimation() {
     }
 
     const ageResults = await estimateAgeBurst(frames);
-    console.log('Age estimation results:', ageResults);
     const decision = decide(ageResults);
 
     switch (decision.outcome) {

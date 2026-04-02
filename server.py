@@ -234,12 +234,12 @@ def validate_liveness(task, motion_history):
         yaws = [p.get("yaw", 0) for p in poses]
         base = yaws[0]
         sign = 1 if task == "turn-left" else -1
-        return any((y - base) * sign > 15 for y in yaws)
+        return any((y - base) * sign > 20 for y in yaws)
 
     if task == "nod":
         pitches = [p.get("pitch", 0) for p in poses]
         base = pitches[0]
-        went_down = any(p - base > 12 for p in pitches)
+        went_down = any(p - base > 15 for p in pitches)
         came_back = any(abs(p - base) < 8 for p in pitches[len(pitches) // 2 :])
         return went_down and came_back
 
@@ -249,7 +249,7 @@ def validate_liveness(task, motion_history):
         for bs in blendshapes:
             left = bs.get("eyeBlinkLeft", 0)
             right = bs.get("eyeBlinkRight", 0)
-            both = left > 0.5 and right > 0.5
+            both = left > 0.6 and right > 0.6
             if both and not eyes_closed:
                 blink_count += 1
                 eyes_closed = True
@@ -263,7 +263,7 @@ def validate_liveness(task, motion_history):
         if len(areas) < 5 or areas[0] == 0:
             return False
         base = areas[0]
-        went_closer = any(a / base > 1.25 for a in areas)
+        went_closer = any(a / base > 1.3 for a in areas)
         came_back = any(a / base < 1.15 for a in areas[len(areas) // 2 :])
         return went_closer and came_back
 
@@ -280,14 +280,14 @@ def compute_verdict(results):
 
     ages = [r["age"] for r in results if isinstance(r.get("age"), (int, float))]
 
-    if len(ages) < 2:
+    if not ages:
         return {
             "outcome": "unable_to_verify",
             "reason": "insufficient_data",
         }
 
     ages.sort()
-    trimmed = ages[1:-1] if len(ages) >= 4 else ages
+    trimmed = ages[1:-1] if len(ages) >= 3 else ages
     mean_age = sum(trimmed) / len(trimmed)
 
     if mean_age >= 21:

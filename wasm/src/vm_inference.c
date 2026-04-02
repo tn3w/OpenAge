@@ -8,7 +8,7 @@
 
 static void conv2d_3x3(float *out, const float *in, const float *filt,
 					   const float *bias, int h, int w, int ci, int co,
-					   int stride, int pad) {
+					   int stride) {
 	int oh = (h + stride - 1) / stride;
 	int ow = (w + stride - 1) / stride;
 	int pad_h = (oh - 1) * stride + 3 - h;
@@ -182,21 +182,37 @@ static void preprocess(float *out, const uint8_t *rgba, int src_w, int src_h,
 
 	for (int y = 0; y < IN; y++) {
 		float sy = y0f + (y + 0.5f) * scale - 0.5f;
-		int y0 = (int)sy;
+		int y0 = (int)floorf(sy);
 		int y1 = y0 + 1;
 		float fy = sy - y0;
+		if (fy < 0)
+			fy = 0;
+		if (fy > 1)
+			fy = 1;
 		if (y0 < 0)
 			y0 = 0;
+		if (y1 < 0)
+			y1 = 0;
+		if (y0 >= src_h)
+			y0 = src_h - 1;
 		if (y1 >= src_h)
 			y1 = src_h - 1;
 
 		for (int x = 0; x < IN; x++) {
 			float sx = x0f + (x + 0.5f) * scale - 0.5f;
-			int x0 = (int)sx;
+			int x0 = (int)floorf(sx);
 			int x1 = x0 + 1;
 			float fx = sx - x0;
+			if (fx < 0)
+				fx = 0;
+			if (fx > 1)
+				fx = 1;
 			if (x0 < 0)
 				x0 = 0;
+			if (x1 < 0)
+				x1 = 0;
+			if (x0 >= src_w)
+				x0 = src_w - 1;
 			if (x1 >= src_w)
 				x1 = src_w - 1;
 
@@ -329,7 +345,7 @@ float age_model_infer(AgeModel *m, const uint8_t *rgba, int width, int height,
 	float *skip = m->buf[2];
 	float *tmp = m->buf[3];
 
-	conv2d_3x3(a, input, m->conv_in_w, m->conv_in_b, IN, IN, 3, 32, 2, 1);
+	conv2d_3x3(a, input, m->conv_in_w, m->conv_in_b, IN, IN, 3, 32, 2);
 	relu_ip(a, 56 * 56 * 32);
 	free(input);
 

@@ -51,8 +51,26 @@
     var box = last.boundingBox || {};
     var boxArg =
         (box.x || 0) + ',' + (box.y || 0) + ',' + (box.width || 1) + ',' + (box.height || 1);
-    var ageResult = JSON.parse(__vm_infer_age(boxArg));
-    var age = ageResult ? ageResult.age : null;
+
+    var BURST_FRAMES = 5;
+    var ageReadings = [];
+    for (var bi = 0; bi < BURST_FRAMES; bi++) {
+        var ageResult = JSON.parse(__vm_infer_age(boxArg));
+        if (ageResult && typeof ageResult.age === 'number' && ageResult.age > 0) {
+            ageReadings.push(ageResult.age);
+        }
+    }
+
+    var age = null;
+    if (ageReadings.length > 0) {
+        ageReadings.sort(function (a, b) {
+            return a - b;
+        });
+        var trimmed = ageReadings.length >= 3 ? ageReadings.slice(1, -1) : ageReadings;
+        var sum = 0;
+        for (var si = 0; si < trimmed.length; si++) sum += trimmed[si];
+        age = sum / trimmed.length;
+    }
 
     function detectYawShift(h, targetDelta) {
         if (h.length < 5) return false;

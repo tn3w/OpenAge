@@ -86,10 +86,10 @@ The result flows directly from C inference to QuickJS bytecode validation — br
 2. **Model decryption** — browser fetches encrypted MediaPipe `.enc` file, passes to WASM `vm_decrypt_blob` for ChaCha20 decryption
 3. **Motion capture** — browser collects face tracking samples over 3 seconds via MediaPipe, stores as motion history
 4. **Transport negotiation** — client sends supported transports at session creation; server selects WebSocket when both sides support it, otherwise long polling; verify responses include the next challenge inline so rounds start with zero delay
-5. **VM execution** — bytecode calls `__vm_infer_age()` (C inference on live video frame), reads pre-collected motion data via `__vm_get_face_data()`, validates liveness, applies age policy, detects spoofing
+5. **VM execution** — bytecode calls `__vm_infer_age()` five times (burst inference matching the demo's approach), computes trimmed mean, reads pre-collected motion data via `__vm_get_face_data()`, validates liveness, applies age policy, detects spoofing
 6. **Sealed response** — VM derives ephemeral keys via XOR-unmask, encrypts (ChaCha20), signs (HMAC-SHA256), wipes keys from stack
-7. **Dual validation** — server validates liveness independently AND checks the VM's liveness result; both must pass; round number and integrity field verified
-8. **Verdict** — after 5 rounds, server computes trimmed mean age: pass (≥ 21), fail (< 15), retry (15–21)
+7. **Dual validation** — server validates liveness independently AND checks the VM's liveness result; both must pass with identical thresholds; round number and integrity field verified
+8. **Verdict** — after all rounds, server computes trimmed mean age: pass (≥ 21), fail (< 15), retry (15–21)
 
 ### Key Rotation
 
@@ -255,15 +255,15 @@ Returns `{"accepted": true, "complete": false, "round": 1, "nextChallenge": {...
 
 The `demo/` directory contains a standalone browser-only version deployed to GitHub Pages. It uses the same UI but replaces the WASM VM pipeline with client-side face-api.js age estimation and local liveness checks. No server required — all models load from CDN and cache in the browser.
 
-**Differences from the full version:**
+Both versions use identical validation logic: same liveness thresholds (yaw > 20°, nod > 15°, blink > 0.6, distance > 1.3×), same age policy (pass ≥ 21, fail < 15), same burst estimation with trimmed mean, and same suspicious motion detection. The only difference is where the AI model runs.
 
-|                | Full (static/)                              | Demo (demo/)              |
-| -------------- | ------------------------------------------- | ------------------------- |
-| Age inference  | Compiled C in WASM                          | face-api.js in browser JS |
-| Liveness       | Encrypted bytecode + server dual-validation | Client-side motion checks |
-| Age policy     | Encrypted bytecode                          | Client-side policy.js     |
-| Model delivery | ChaCha20-encrypted, WASM-decrypted          | Public CDN, CacheStorage  |
-| Server         | Required (Flask)                            | None                      |
+|                | Full (static/)                              | Demo (demo/)                  |
+| -------------- | ------------------------------------------- | ----------------------------- |
+| Age inference  | 5-frame burst in compiled C (WASM)          | 5-frame burst via face-api.js |
+| Liveness       | Encrypted bytecode + server dual-validation | Client-side motion checks     |
+| Age policy     | Encrypted bytecode (same thresholds)        | Client-side policy.js         |
+| Model delivery | ChaCha20-encrypted, WASM-decrypted          | Public CDN, CacheStorage      |
+| Server         | Required (Flask)                            | None                          |
 
 The demo is not tamper-resistant — it exists to showcase the UX flow.
 
