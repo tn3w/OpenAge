@@ -55,6 +55,11 @@
     var boxArg =
         (box.x || 0) + ',' + (box.y || 0) + ',' + (box.width || 1) + ',' + (box.height || 1);
 
+    var quality = JSON.parse(__vm_check_frame_quality(boxArg));
+    if (!quality || quality.ok !== true) {
+        return fail((quality && quality.reason) || 'quality_unavailable');
+    }
+
     var BURST_FRAMES = 5;
     var PASS_THRESHOLD = 18;
     var FAIL_FLOOR = 15;

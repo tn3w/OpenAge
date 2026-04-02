@@ -1,5 +1,7 @@
 #include <emscripten.h>
+#include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -20,6 +22,10 @@ static int g_model_ready;
 #define MAGIC_RESP 0x564d5250
 #define NONCE_LEN 12
 #define MAC_LEN 32
+#define MIN_BRIGHTNESS 55.0f
+#define MAX_BRIGHTNESS 205.0f
+#define MIN_CONTRAST 20.0f
+#define MIN_SHARPNESS 3.0f
 
 static void wipe(volatile uint8_t *p, size_t n) {
 	for (size_t i = 0; i < n; i++)
@@ -161,6 +167,179 @@ static JSValue js_vm_capture_frame(JSContext *ctx, JSValueConst this_val,
 	return ret;
 }
 
+static void clamp_box(float *bx, float *by, float *bw, float *bh) {
+	if (*bx < 0)
+		*bx = 0;
+	if (*bx > 1)
+		*bx = 1;
+	if (*by < 0)
+		*by = 0;
+	if (*by > 1)
+		*by = 1;
+	if (*bw < 0.01f)
+		*bw = 0.01f;
+	if (*bw > 1)
+		*bw = 1;
+	if (*bh < 0.01f)
+		*bh = 0.01f;
+	if (*bh > 1)
+		*bh = 1;
+	if (*bx + *bw > 1)
+		*bw = 1 - *bx;
+	if (*by + *bh > 1)
+		*bh = 1 - *by;
+}
+
+static int capture_video_frame(uint8_t **pixels, int *video_width,
+							   int *video_height) {
+	int vw = EM_ASM_INT({
+		var v = document.querySelector('video');
+		return v ? v.videoWidth : 0;
+	});
+	int vh = EM_ASM_INT({
+		var v = document.querySelector('video');
+		return v ? v.videoHeight : 0;
+	});
+
+	if (vw <= 0 || vh <= 0)
+		return 0;
+
+	int size = vw * vh * 4;
+	uint8_t *buffer = (uint8_t *)malloc(size);
+	if (!buffer)
+		return 0;
+
+	EM_ASM(
+		{
+			var v = document.querySelector('video');
+			var c = document.createElement('canvas');
+			c.width = $1;
+			c.height = $2;
+			var g = c.getContext('2d');
+			g.drawImage(v, 0, 0, $1, $2);
+			var d = g.getImageData(0, 0, $1, $2);
+			HEAPU8.set(d.data, $0);
+		},
+		buffer, vw, vh);
+
+	*pixels = buffer;
+	*video_width = vw;
+	*video_height = vh;
+	return 1;
+}
+
+static float pixel_luma(const uint8_t *rgba, int width, int x, int y) {
+	int idx = (y * width + x) * 4;
+	return 0.299f * rgba[idx] + 0.587f * rgba[idx + 1] + 0.114f * rgba[idx + 2];
+}
+
+static int evaluate_frame_quality(const uint8_t *rgba, int width, int height,
+								  float bx, float by, float bw, float bh,
+								  const char **reason) {
+	int x0 = (int)floorf(bx * width);
+	int y0 = (int)floorf(by * height);
+	int x1 = (int)ceilf((bx + bw) * width);
+	int y1 = (int)ceilf((by + bh) * height);
+
+	if (x0 < 1)
+		x0 = 1;
+	if (y0 < 1)
+		y0 = 1;
+	if (x1 > width - 1)
+		x1 = width - 1;
+	if (y1 > height - 1)
+		y1 = height - 1;
+	if (x1 - x0 < 16 || y1 - y0 < 16) {
+		*reason = "quality_unavailable";
+		return 0;
+	}
+
+	double sum = 0;
+	double sum_sq = 0;
+	double laplacian_sum = 0;
+	int count = 0;
+
+	for (int y = y0; y < y1; y += 3) {
+		for (int x = x0; x < x1; x += 3) {
+			float center = pixel_luma(rgba, width, x, y);
+			float left = pixel_luma(rgba, width, x - 1, y);
+			float right = pixel_luma(rgba, width, x + 1, y);
+			float top = pixel_luma(rgba, width, x, y - 1);
+			float bottom = pixel_luma(rgba, width, x, y + 1);
+			sum += center;
+			sum_sq += center * center;
+			laplacian_sum += fabsf(4 * center - left - right - top - bottom);
+			count++;
+		}
+	}
+
+	if (count == 0) {
+		*reason = "quality_unavailable";
+		return 0;
+	}
+
+	float brightness = (float)(sum / count);
+	float variance = (float)(sum_sq / count - brightness * brightness);
+	if (variance < 0)
+		variance = 0;
+	float contrast = sqrtf(variance);
+	float sharpness = (float)(laplacian_sum / count / 3.0);
+
+	if (brightness < MIN_BRIGHTNESS) {
+		*reason = "too_dark";
+		return 0;
+	}
+	if (brightness > MAX_BRIGHTNESS) {
+		*reason = "too_bright";
+		return 0;
+	}
+	if (contrast < MIN_CONTRAST) {
+		*reason = "low_contrast";
+		return 0;
+	}
+	if (sharpness < MIN_SHARPNESS) {
+		*reason = "image_blurry";
+		return 0;
+	}
+
+	return 1;
+}
+
+static JSValue js_vm_check_frame_quality(JSContext *ctx, JSValueConst this_val,
+										 int argc, JSValueConst *argv) {
+	float bx = 0, by = 0, bw = 1, bh = 1;
+	if (argc > 0) {
+		const char *arg = JS_ToCString(ctx, argv[0]);
+		if (arg) {
+			sscanf(arg, "%f,%f,%f,%f", &bx, &by, &bw, &bh);
+			JS_FreeCString(ctx, arg);
+		}
+	}
+
+	clamp_box(&bx, &by, &bw, &bh);
+
+	uint8_t *pixels = NULL;
+	int width = 0;
+	int height = 0;
+	if (!capture_video_frame(&pixels, &width, &height)) {
+		return JS_NewString(
+			ctx, "{\"ok\":false,\"reason\":\"quality_unavailable\"}");
+	}
+
+	const char *reason = NULL;
+	int ok =
+		evaluate_frame_quality(pixels, width, height, bx, by, bw, bh, &reason);
+	free(pixels);
+
+	if (ok)
+		return JS_NewString(ctx, "{\"ok\":true}");
+
+	char buffer[96];
+	snprintf(buffer, sizeof(buffer), "{\"ok\":false,\"reason\":\"%s\"}",
+			 reason ? reason : "quality_unavailable");
+	return JS_NewString(ctx, buffer);
+}
+
 static void ensure_age_model(void) {
 	if (g_model_ready)
 		return;
@@ -184,53 +363,13 @@ static JSValue js_vm_infer_age(JSContext *ctx, JSValueConst this_val, int argc,
 			JS_FreeCString(ctx, arg);
 		}
 	}
+	clamp_box(&bx, &by, &bw, &bh);
 
-	if (bx < 0)
-		bx = 0;
-	if (bx > 1)
-		bx = 1;
-	if (by < 0)
-		by = 0;
-	if (by > 1)
-		by = 1;
-	if (bw < 0.01f)
-		bw = 0.01f;
-	if (bw > 1)
-		bw = 1;
-	if (bh < 0.01f)
-		bh = 0.01f;
-	if (bh > 1)
-		bh = 1;
-
-	int vw = EM_ASM_INT({
-		var v = document.querySelector('video');
-		return v ? v.videoWidth : 0;
-	});
-	int vh = EM_ASM_INT({
-		var v = document.querySelector('video');
-		return v ? v.videoHeight : 0;
-	});
-
-	if (vw <= 0 || vh <= 0)
+	uint8_t *px = NULL;
+	int vw = 0;
+	int vh = 0;
+	if (!capture_video_frame(&px, &vw, &vh))
 		return JS_NewString(ctx, "{\"age\":null}");
-
-	int sz = vw * vh * 4;
-	uint8_t *px = (uint8_t *)malloc(sz);
-	if (!px)
-		return JS_NewString(ctx, "{\"age\":null}");
-
-	EM_ASM(
-		{
-			var v = document.querySelector('video');
-			var c = document.createElement('canvas');
-			c.width = $1;
-			c.height = $2;
-			var g = c.getContext('2d');
-			g.drawImage(v, 0, 0, $1, $2);
-			var d = g.getImageData(0, 0, $1, $2);
-			HEAPU8.set(d.data, $0);
-		},
-		px, vw, vh);
 
 	float age = age_model_infer(&g_age_model, px, vw, vh, bx, by, bw, bh);
 	free(px);
@@ -265,6 +404,9 @@ static void register_intrinsics(JSContext *ctx) {
 	JS_SetPropertyStr(
 		ctx, g, "__vm_capture_frame",
 		JS_NewCFunction(ctx, js_vm_capture_frame, "__vm_capture_frame", 0));
+	JS_SetPropertyStr(ctx, g, "__vm_check_frame_quality",
+					  JS_NewCFunction(ctx, js_vm_check_frame_quality,
+									  "__vm_check_frame_quality", 1));
 	JS_SetPropertyStr(
 		ctx, g, "__vm_infer_age",
 		JS_NewCFunction(ctx, js_vm_infer_age, "__vm_infer_age", 1));

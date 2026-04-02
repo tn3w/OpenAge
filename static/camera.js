@@ -6,6 +6,11 @@ const CONSTRAINTS = {
     },
 };
 
+const MIN_BRIGHTNESS = 55;
+const MAX_BRIGHTNESS = 205;
+const MIN_CONTRAST = 20;
+const MIN_SHARPNESS = 3;
+
 let stream = null;
 let videoElement = null;
 
@@ -52,11 +57,16 @@ export function checkFrameQuality(canvas) {
     const data = imageData.data;
 
     const brightness = averageBrightness(data);
-    if (brightness < 40) return { ok: false, reason: 'Too dark' };
-    if (brightness > 220) return { ok: false, reason: 'Too bright' };
+    if (brightness < MIN_BRIGHTNESS) return { ok: false, reason: 'Too dark' };
+    if (brightness > MAX_BRIGHTNESS) return { ok: false, reason: 'Too bright' };
+
+    const contrast = estimateContrast(data);
+    if (contrast < MIN_CONTRAST) {
+        return { ok: false, reason: 'Lighting is too flat' };
+    }
 
     const sharpness = estimateSharpness(data, width, height);
-    if (sharpness < 5) return { ok: false, reason: 'Image is blurry' };
+    if (sharpness < MIN_SHARPNESS) return { ok: false, reason: 'Image is blurry' };
 
     return { ok: true };
 }
@@ -70,6 +80,22 @@ function averageBrightness(data) {
     }
 
     return sum / pixelCount;
+}
+
+function estimateContrast(data) {
+    let sum = 0;
+    let sumSquares = 0;
+    const pixelCount = data.length / 4;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const brightness = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        sum += brightness;
+        sumSquares += brightness * brightness;
+    }
+
+    const mean = sum / pixelCount;
+    const variance = Math.max(sumSquares / pixelCount - mean * mean, 0);
+    return Math.sqrt(variance);
 }
 
 function estimateSharpness(data, width, height) {

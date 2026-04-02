@@ -1,4 +1,4 @@
-import { startCamera, captureFrame, stopCamera, checkFrameQuality } from './camera.js';
+import { startCamera, captureFrame, stopCamera } from './camera.js';
 import {
     ensureModels,
     getMediaPipeModelBuffer,
@@ -191,16 +191,8 @@ function startPositioning() {
             setVideoStatus('Multiple faces — only one person');
             stableFrames = 0;
         } else {
-            const frame = captureFrame();
-            const quality = frame ? checkFrameQuality(frame) : { ok: true };
-
-            if (!quality.ok) {
-                setVideoStatus(quality.reason);
-                stableFrames = 0;
-            } else {
-                setVideoStatus('Face detected — hold still…');
-                stableFrames++;
-            }
+            setVideoStatus('Face detected — hold still…');
+            stableFrames++;
         }
 
         if (stableFrames >= 10) {
@@ -269,7 +261,7 @@ async function runChallengeRounds() {
         }
 
         if (result.error) {
-            setVideoStatus(`Round error: ${result.error}`);
+            setVideoStatus(describeRoundError(result.error));
             await sleep(1000);
         }
 
@@ -354,6 +346,29 @@ function buildVerdictMessage(baseMessage, verdict) {
     }
 
     return parts.join(' ');
+}
+
+function describeRoundError(errorCode) {
+    switch (errorCode) {
+        case 'too_dark':
+            return 'Round error: Too dark';
+        case 'too_bright':
+            return 'Round error: Too bright';
+        case 'low_contrast':
+            return 'Round error: Lighting is too flat';
+        case 'image_blurry':
+            return 'Round error: Image is blurry';
+        case 'quality_unavailable':
+            return 'Round error: Could not assess image quality';
+        case 'no_face':
+            return 'Round error: No face detected';
+        case 'bad_face_count':
+            return 'Round error: Multiple faces detected';
+        case 'insufficient_motion':
+            return 'Round error: Not enough motion data';
+        default:
+            return `Round error: ${errorCode}`;
+    }
 }
 
 function buildEstimatedAgeText(age) {

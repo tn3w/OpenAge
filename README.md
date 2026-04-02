@@ -12,6 +12,9 @@ Age inference and liveness evaluation run locally.
 Trust comes from compiled code, encrypted VM policy, signed challenges, sealed
 responses, and server-side revalidation.
 
+Production blur and lighting checks now run in the VM path instead of browser
+JavaScript.
+
 ## Why This Project Matters
 
 - It keeps camera data local.
