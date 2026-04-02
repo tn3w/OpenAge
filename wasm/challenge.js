@@ -53,6 +53,9 @@
         (box.x || 0) + ',' + (box.y || 0) + ',' + (box.width || 1) + ',' + (box.height || 1);
 
     var BURST_FRAMES = 5;
+    var AGE_ADJUSTMENT = 2;
+    var PASS_THRESHOLD = 18;
+    var FAIL_FLOOR = 15;
     var ageReadings = [];
     for (var bi = 0; bi < BURST_FRAMES; bi++) {
         var ageResult = JSON.parse(__vm_infer_age(boxArg));
@@ -61,6 +64,7 @@
         }
     }
 
+    var rawAge = null;
     var age = null;
     if (ageReadings.length > 0) {
         ageReadings.sort(function (a, b) {
@@ -69,7 +73,8 @@
         var trimmed = ageReadings.length >= 3 ? ageReadings.slice(1, -1) : ageReadings;
         var sum = 0;
         for (var si = 0; si < trimmed.length; si++) sum += trimmed[si];
-        age = sum / trimmed.length;
+        rawAge = sum / trimmed.length;
+        age = rawAge - AGE_ADJUSTMENT;
     }
 
     function detectYawShift(h, targetDelta) {
@@ -163,9 +168,9 @@
     }
 
     function ageDecision(a) {
-        if (typeof a !== 'number' || a <= 0) return 'insufficient_data';
-        if (a >= 21) return 'pass';
-        if (a < 15) return 'fail';
+        if (typeof a !== 'number' || !isFinite(a)) return 'insufficient_data';
+        if (a >= PASS_THRESHOLD) return 'pass';
+        if (a < FAIL_FLOOR) return 'fail';
         return 'retry';
     }
 
@@ -181,6 +186,8 @@
         round: challenge.round,
         task: challenge.task,
         age: age,
+        rawAge: rawAge,
+        ageAdjustment: AGE_ADJUSTMENT,
         faceCount: face.faceCount,
         headPose: last.headPose,
         blendshapes: last.blendshapes,

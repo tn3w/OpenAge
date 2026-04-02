@@ -27,6 +27,10 @@ CHALLENGE_TTL = 60
 MAX_ROUNDS = 3
 SESSION_TTL = 300
 SUPPORTED_TRANSPORTS = ["websocket", "poll"]
+AGE_THRESHOLD = 18
+FAIL_FLOOR = 15
+AGE_ADJUSTMENT = 2
+REQUIRED_LIVENESS_PASSES = 2
 
 LIVENESS_TASKS = [
     "turn-left",
@@ -270,40 +274,73 @@ def validate_liveness(task, motion_history):
     return False
 
 
-def compute_verdict(results):
-    liveness_passed = sum(1 for r in results if r.get("liveness_ok"))
-    if liveness_passed < 2:
-        return {
-            "outcome": "fail",
-            "reason": "liveness_failed",
-        }
+def compute_trimmed_mean(values):
+    if not values:
+        return None
 
-    ages = [r["age"] for r in results if isinstance(r.get("age"), (int, float))]
+    ordered = sorted(values)
+    trimmed = ordered[1:-1] if len(ordered) >= 3 else ordered
+    return sum(trimmed) / len(trimmed)
 
-    if not ages:
-        return {
-            "outcome": "unable_to_verify",
-            "reason": "insufficient_data",
-        }
 
-    ages.sort()
-    trimmed = ages[1:-1] if len(ages) >= 3 else ages
-    mean_age = sum(trimmed) / len(trimmed)
-
-    if mean_age >= 21:
-        return {
-            "outcome": "pass",
-            "estimatedAge": round(mean_age, 1),
-        }
-    if mean_age < 15:
-        return {
-            "outcome": "fail",
-            "estimatedAge": round(mean_age, 1),
-        }
-    return {
-        "outcome": "retry",
-        "estimatedAge": round(mean_age, 1),
+def build_verdict(outcome, estimated_age=None, reason=None, raw_estimated_age=None):
+    verdict = {
+        "outcome": outcome,
+        "reason": reason,
+        "passThreshold": AGE_THRESHOLD,
+        "ageAdjustment": AGE_ADJUSTMENT,
     }
+
+    if estimated_age is not None:
+        verdict["estimatedAge"] = round(estimated_age, 1)
+
+    if raw_estimated_age is not None:
+        verdict["rawEstimatedAge"] = round(raw_estimated_age, 1)
+
+    return verdict
+
+
+def compute_verdict(results):
+    adjusted_ages = [
+        r["age"] for r in results if isinstance(r.get("age"), (int, float))
+    ]
+    raw_ages = [
+        r["rawAge"] for r in results if isinstance(r.get("rawAge"), (int, float))
+    ]
+
+    estimated_age = compute_trimmed_mean(adjusted_ages)
+    raw_estimated_age = compute_trimmed_mean(raw_ages)
+
+    liveness_passed = sum(1 for r in results if r.get("liveness_ok"))
+    if liveness_passed < REQUIRED_LIVENESS_PASSES:
+        reason = (
+            f"Only {liveness_passed} of {MAX_ROUNDS} liveness checks passed. "
+            f"{REQUIRED_LIVENESS_PASSES} are required"
+        )
+        return build_verdict("fail", estimated_age, reason, raw_estimated_age)
+
+    if estimated_age is None:
+        return build_verdict(
+            "retry",
+            reason="No reliable age estimate was produced",
+            raw_estimated_age=raw_estimated_age,
+        )
+
+    if estimated_age >= AGE_THRESHOLD:
+        return build_verdict("pass", estimated_age, None, raw_estimated_age)
+
+    if estimated_age < FAIL_FLOOR:
+        reason = (
+            f"Production passes at {AGE_THRESHOLD}+ after applying the "
+            f"-{AGE_ADJUSTMENT} adjustment and values below {FAIL_FLOOR} fail"
+        )
+        return build_verdict("fail", estimated_age, reason, raw_estimated_age)
+
+    reason = (
+        f"Production passes at {AGE_THRESHOLD}+ after applying the "
+        f"-{AGE_ADJUSTMENT} adjustment"
+    )
+    return build_verdict("retry", estimated_age, reason, raw_estimated_age)
 
 
 @app.route("/")

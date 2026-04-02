@@ -223,7 +223,8 @@ function updateChallengeUI() {
         `<div class="bar" ` + `style="width:${prog * 100}%"></div>`;
 
     setVideoStatus(
-        `Challenge ` + `${livenessSession.currentIndex + 1}` + ` of ${livenessSession.tasks.length}`
+        `Complete ${livenessSession.completedTasks + 1} of ` +
+            `${livenessSession.requiredTaskPasses} required checks`
     );
 }
 
@@ -260,12 +261,14 @@ async function runAgeEstimation() {
 function handleLivenessFail() {
     retryCount++;
     if (retryCount >= MAX_RETRIES) {
-        showResult('fail', 'Unable to verify. Try again later.');
+        showResult('fail', buildLivenessResultMessage('Unable to verify. Try again later.'));
         return;
     }
     showResult(
         'retry',
-        `Verification unsuccessful. ` + `${MAX_RETRIES - retryCount} attempt(s) left.`
+        buildLivenessResultMessage(
+            `Verification unsuccessful. ${MAX_RETRIES - retryCount} attempt(s) left.`
+        )
     );
 }
 
@@ -285,15 +288,40 @@ function handleRetryDecision(decision = null) {
 }
 
 function buildAgeResultMessage(baseMessage, decision) {
-    if (!Number.isFinite(decision?.estimatedAge)) {
-        return baseMessage;
+    const parts = [baseMessage];
+
+    if (Number.isFinite(decision?.estimatedAge)) {
+        parts.push(buildEstimatedAgeText(decision.estimatedAge, decision.ageAdjustment));
     }
 
-    return `${baseMessage} Estimated age: ${formatEstimatedAge(decision.estimatedAge)}.`;
+    if (decision?.reason) {
+        parts.push(`Reason: ${decision.reason}.`);
+    }
+
+    return parts.join(' ');
 }
 
 function formatEstimatedAge(age) {
     return age.toFixed(1).replace(/\.0$/, '');
+}
+
+function buildEstimatedAgeText(age, ageAdjustment = 0) {
+    const adjustmentText =
+        Number.isFinite(ageAdjustment) && ageAdjustment > 0
+            ? ` after the -${ageAdjustment} adjustment`
+            : '';
+
+    return `Estimated age: ${formatEstimatedAge(age)}${adjustmentText}.`;
+}
+
+function buildLivenessResultMessage(baseMessage) {
+    const parts = [baseMessage];
+
+    if (livenessSession?.failReason) {
+        parts.push(`Reason: ${livenessSession.failReason}`);
+    }
+
+    return parts.join(' ');
 }
 
 function showResult(type, message) {

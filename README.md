@@ -37,7 +37,7 @@ sequenceDiagram
         S->>B: first challenge token
     end
 
-    loop Each verification round (5 total)
+    loop Each verification round (3 total)
         B->>B: Collect motion data over 3s (MediaPipe face tracking)
         B->>W: Set face data, execute challenge.vmbc
         W->>W: __vm_infer_age() — capture video frame, run CNN in C
@@ -89,7 +89,9 @@ The result flows directly from C inference to QuickJS bytecode validation — br
 5. **VM execution** — bytecode calls `__vm_infer_age()` five times (burst inference matching the demo's approach), computes trimmed mean, reads pre-collected motion data via `__vm_get_face_data()`, validates liveness, applies age policy, detects spoofing
 6. **Sealed response** — VM derives ephemeral keys via XOR-unmask, encrypts (ChaCha20), signs (HMAC-SHA256), wipes keys from stack
 7. **Dual validation** — server validates liveness independently AND checks the VM's liveness result; both must pass with identical thresholds; round number and integrity field verified
-8. **Verdict** — after all rounds, server computes trimmed mean age: pass (≥ 21), fail (< 15), retry (15–21)
+8. **Verdict** — after all rounds, server computes the trimmed mean age,
+   applies a `-2` adjustment, and returns pass (≥ 18), fail (< 15), or
+   retry (15–18)
 
 ### Key Rotation
 
@@ -127,8 +129,9 @@ Old builds retained for active sessions (max 3 concurrent).
 2. **VM boot** — browser loads WASM VM (age model weights are baked into the binary), decrypts MediaPipe model
 3. **Camera** — requests front camera, checks lighting/blur
 4. **Positioning** — confirms one face is visible and stable via MediaPipe
-5. **Challenge rounds** — 5 rounds: each challenge arrives inline from the previous verify response (or via WebSocket push / initial poll) → collects motion over 3s → VM runs `__vm_infer_age()` on live video frame (C inference) → validates liveness from motion data → applies age policy → encrypts + signs response → server re-validates
-6. **Decision** — server computes trimmed mean: pass (≥ 21), retry (15–21), fail (< 15)
+5. **Challenge rounds** — 3 rounds: each challenge arrives inline from the previous verify response (or via WebSocket push / initial poll) → collects motion over 3s → VM runs `__vm_infer_age()` on live video frame (C inference) → validates liveness from motion data → applies age policy → encrypts + signs response → server re-validates
+6. **Decision** — server computes the trimmed mean, applies a `-2`
+   adjustment, then returns pass (≥ 18), retry (15–18), or fail (< 15)
 
 ## File Structure
 
@@ -196,7 +199,7 @@ Omitting the body defaults to polling.
     "wasmBin": "/vm/vm.wasm",
     "loaderJs": "/vm/loader.js",
     "challengeVmbc": "/vm/challenge.vmbc",
-    "rounds": 5,
+    "rounds": 3,
     "tasks": ["turn-left", "blink-twice", "nod"],
     "exports": { "vm_init": "...", "vm_destroy": "...", "vm_decrypt_blob": "..." },
     "transport": "websocket",
@@ -255,10 +258,12 @@ Returns `{"accepted": true, "complete": false, "round": 1, "nextChallenge": {...
 
 The `demo/` directory contains a standalone browser-only version deployed to GitHub Pages. It uses the same UI but replaces the WASM VM pipeline with client-side face-api.js age estimation and local liveness checks. No server required — all models load from CDN and cache in the browser.
 
-Demo result screens include the locally estimated age for age-based pass, retry,
-and fail outcomes.
+Result screens in both clients include the estimated age for age-based pass,
+retry, and fail outcomes, and explain why a verification did not pass.
 
-Both versions use identical validation logic: same liveness thresholds (yaw > 20°, nod > 15°, blink > 0.6, distance > 1.3×), same age policy (pass ≥ 21, fail < 15), same burst estimation with trimmed mean, and same suspicious motion detection. The only difference is where the AI model runs.
+Both versions use the same policy: trimmed-mean age estimation with a `-2`
+adjustment, pass at estimated age 18+, fail below 15, retry between 15 and 18,
+and 2 of 3 liveness checks required.
 
 |                | Full (static/)                              | Demo (demo/)                  |
 | -------------- | ------------------------------------------- | ----------------------------- |
@@ -287,15 +292,15 @@ The demo is not tamper-resistant — it exists to showcase the UX flow.
 
 ## Configuration
 
-| Setting               | Default        | Location                           |
-| --------------------- | -------------- | ---------------------------------- |
-| Port                  | 8000           | `PORT` env var                     |
-| WASM rebuild interval | 10 min         | `REBUILD_INTERVAL` in server.py    |
-| Challenge rounds      | 5              | `MAX_ROUNDS` in server.py          |
-| Challenge TTL         | 60s            | `CHALLENGE_TTL` in server.py       |
-| Session TTL           | 5 min          | `SESSION_TTL` in server.py         |
-| Age threshold         | 18 + 3 margin  | `compute_verdict()` in server.py   |
-| Transport             | auto-negotiate | WebSocket preferred, poll fallback |
+| Setting               | Default                  | Location                                            |
+| --------------------- | ------------------------ | --------------------------------------------------- |
+| Port                  | 8000                     | `PORT` env var                                      |
+| WASM rebuild interval | 10 min                   | `REBUILD_INTERVAL` in server.py                     |
+| Challenge rounds      | 3                        | `MAX_ROUNDS` in server.py                           |
+| Challenge TTL         | 60s                      | `CHALLENGE_TTL` in server.py                        |
+| Session TTL           | 5 min                    | `SESSION_TTL` in server.py                          |
+| Age threshold         | 18 after `-2` adjustment | `compute_verdict()` in server.py / `demo/policy.js` |
+| Transport             | auto-negotiate           | WebSocket preferred, poll fallback                  |
 
 ## Browser Support
 

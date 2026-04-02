@@ -31,6 +31,7 @@ const TASKS = [
 const TASK_TIMEOUT_MS = 8000;
 const MIN_TASK_TIME_MS = 500;
 const TASK_COUNT = 3;
+const REQUIRED_TASK_PASSES = 2;
 
 export function pickTasks() {
     const shuffled = [...TASKS].sort(() => Math.random() - 0.5);
@@ -45,13 +46,15 @@ export function createLivenessSession() {
         history: [],
         taskStartTime: 0,
         completedTasks: 0,
+        requiredTaskPasses: REQUIRED_TASK_PASSES,
         failed: false,
         failReason: null,
     };
 }
 
 export function processFrame(session, video, timestampMs) {
-    if (session.failed || session.currentIndex >= session.tasks.length) return session;
+    if (session.failed || isLivenessComplete(session)) return session;
+    if (session.currentIndex >= session.tasks.length) return session;
 
     const result = track(video, timestampMs);
     if (!result || result.faceCount === 0) return session;
@@ -80,8 +83,7 @@ export function processFrame(session, video, timestampMs) {
     const elapsed = frameTimestampMs - session.taskStartTime;
 
     if (elapsed > TASK_TIMEOUT_MS) {
-        session.failed = true;
-        session.failReason = 'Task timed out';
+        advanceTask(session);
         return session;
     }
 
@@ -98,31 +100,49 @@ export function processFrame(session, video, timestampMs) {
         }
 
         session.completedTasks++;
-        session.currentIndex++;
-        session.history = [];
-        session.taskStartTime = frameTimestampMs;
+        advanceTask(session);
     }
 
     return session;
 }
 
 export function isLivenessComplete(session) {
-    return session.currentIndex >= session.tasks.length;
+    return session.completedTasks >= session.requiredTaskPasses;
 }
 
 export function currentInstruction(session) {
+    if (isLivenessComplete(session)) return null;
     if (session.currentIndex >= session.tasks.length) return null;
     return session.tasks[session.currentIndex].instruction;
 }
 
 export function currentTaskId(session) {
+    if (isLivenessComplete(session)) return null;
     if (session.currentIndex >= session.tasks.length) return null;
     return session.tasks[session.currentIndex].id;
 }
 
 export function progress(session) {
-    if (session.tasks.length === 0) return 1;
-    return session.currentIndex / session.tasks.length;
+    if (session.requiredTaskPasses === 0) return 1;
+    return Math.min(session.completedTasks / session.requiredTaskPasses, 1);
+}
+
+function advanceTask(session) {
+    session.currentIndex++;
+    session.history = [];
+    session.taskStartTime = 0;
+
+    if (!canStillPass(session)) {
+        session.failed = true;
+        session.failReason =
+            `Liveness incomplete. Completed ${session.completedTasks} of ` +
+            `${session.requiredTaskPasses} required checks.`;
+    }
+}
+
+function canStillPass(session) {
+    const remainingTasks = session.tasks.length - session.currentIndex;
+    return session.completedTasks + remainingTasks >= session.requiredTaskPasses;
 }
 
 function detectYawShift(history, targetDelta) {

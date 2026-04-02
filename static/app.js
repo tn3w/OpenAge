@@ -321,26 +321,59 @@ function handleVerdict(verdict) {
     destroyVM();
     switch (verdict.outcome) {
         case 'pass':
-            showResult('pass', 'Age verified. You may proceed.');
+            showResult('pass', buildVerdictMessage('Age verified. You may proceed.', verdict));
             break;
         case 'fail':
-            showResult('fail', 'Unable to verify. Try again later.');
+            showResult('fail', buildVerdictMessage('Unable to verify. Try again later.', verdict));
             break;
         case 'retry':
-            handleRetryDecision();
+            handleRetryDecision(verdict);
             break;
         default:
             showResult('fail', 'Verification inconclusive.');
     }
 }
 
-function handleRetryDecision() {
+function handleRetryDecision(verdict = null) {
     retryCount++;
     if (retryCount >= MAX_RETRIES) {
-        showResult('fail', 'Unable to verify. Try again later.');
+        showResult('fail', buildVerdictMessage('Unable to verify. Try again later.', verdict));
         return;
     }
-    showResult('retry', `Could not confirm age. ` + `${MAX_RETRIES - retryCount} attempt(s) left.`);
+    showResult(
+        'retry',
+        buildVerdictMessage(
+            `Could not confirm age. ${MAX_RETRIES - retryCount} attempt(s) left.`,
+            verdict
+        )
+    );
+}
+
+function buildVerdictMessage(baseMessage, verdict) {
+    const parts = [baseMessage];
+
+    if (Number.isFinite(verdict?.estimatedAge)) {
+        parts.push(buildEstimatedAgeText(verdict.estimatedAge, verdict.ageAdjustment));
+    }
+
+    if (verdict?.reason) {
+        parts.push(`Reason: ${verdict.reason}.`);
+    }
+
+    return parts.join(' ');
+}
+
+function buildEstimatedAgeText(age, ageAdjustment = 0) {
+    const adjustmentText =
+        Number.isFinite(ageAdjustment) && ageAdjustment > 0
+            ? ` after the -${ageAdjustment} adjustment`
+            : '';
+
+    return `Estimated age: ${formatEstimatedAge(age)}${adjustmentText}.`;
+}
+
+function formatEstimatedAge(age) {
+    return age.toFixed(1).replace(/\.0$/, '');
 }
 
 function showResult(type, message) {
