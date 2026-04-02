@@ -17,6 +17,8 @@
         return typeof value === 'number' && isFinite(value) ? value : fallback;
     }
 
+    var faceCount = safeNumber(face && face.faceCount, 0);
+
     function normalizeFrame(frame) {
         var headPose = (frame && frame.headPose) || {};
         var blendshapes = (frame && frame.blendshapes) || {};
@@ -24,13 +26,14 @@
         var width = safeNumber(boundingBox.width, 0);
         var height = safeNumber(boundingBox.height, 0);
         return {
-            ts: safeNumber(frame && frame.ts, 0),
             headPose: {
                 yaw: safeNumber(headPose.yaw, 0),
                 pitch: safeNumber(headPose.pitch, 0),
-                roll: safeNumber(headPose.roll, 0),
             },
-            blendshapes: blendshapes,
+            blendshapes: {
+                eyeBlinkLeft: safeNumber(blendshapes.eyeBlinkLeft, 0),
+                eyeBlinkRight: safeNumber(blendshapes.eyeBlinkRight, 0),
+            },
             boundingBox: {
                 x: safeNumber(boundingBox.x, 0),
                 y: safeNumber(boundingBox.y, 0),
@@ -41,8 +44,8 @@
         };
     }
 
-    if (!face || !face.facePresent) return fail('no_face');
-    if (face.faceCount !== 1) return fail('bad_face_count');
+    if (faceCount < 1) return fail('no_face');
+    if (faceCount !== 1) return fail('bad_face_count');
 
     var motionHistory = (face.motionHistory || []).map(normalizeFrame);
     if (motionHistory.length < 5) return fail('insufficient_motion');
@@ -53,7 +56,6 @@
         (box.x || 0) + ',' + (box.y || 0) + ',' + (box.width || 1) + ',' + (box.height || 1);
 
     var BURST_FRAMES = 5;
-    var AGE_ADJUSTMENT = 2;
     var PASS_THRESHOLD = 18;
     var FAIL_FLOOR = 15;
     var ageReadings = [];
@@ -64,7 +66,16 @@
         }
     }
 
-    var rawAge = null;
+    function buildValidationFrame(frame) {
+        return {
+            headPose: frame.headPose,
+            blendshapes: frame.blendshapes,
+            boundingBox: {
+                area: frame.boundingBox.area,
+            },
+        };
+    }
+
     var age = null;
     if (ageReadings.length > 0) {
         ageReadings.sort(function (a, b) {
@@ -73,8 +84,7 @@
         var trimmed = ageReadings.length >= 3 ? ageReadings.slice(1, -1) : ageReadings;
         var sum = 0;
         for (var si = 0; si < trimmed.length; si++) sum += trimmed[si];
-        rawAge = sum / trimmed.length;
-        age = rawAge - AGE_ADJUSTMENT;
+        age = sum / trimmed.length;
     }
 
     function detectYawShift(h, targetDelta) {
@@ -167,34 +177,16 @@
         return false;
     }
 
-    function ageDecision(a) {
-        if (typeof a !== 'number' || !isFinite(a)) return 'insufficient_data';
-        if (a >= PASS_THRESHOLD) return 'pass';
-        if (a < FAIL_FLOOR) return 'fail';
-        return 'retry';
-    }
-
     if (isSuspicious(motionHistory)) return fail('suspicious_motion');
 
     var livenessOk = validateLiveness(challenge.task, motionHistory);
-    var ageOutcome = ageDecision(age);
-
-    var last = motionHistory[motionHistory.length - 1];
 
     return JSON.stringify({
         nonce: challenge.nonce,
         round: challenge.round,
-        task: challenge.task,
         age: age,
-        rawAge: rawAge,
-        ageAdjustment: AGE_ADJUSTMENT,
-        faceCount: face.faceCount,
-        headPose: last.headPose,
-        blendshapes: last.blendshapes,
-        motionHistory: motionHistory,
+        motionHistory: motionHistory.map(buildValidationFrame),
         livenessOk: livenessOk,
-        ageOutcome: ageOutcome,
         integrity: __vm_integrity(),
-        ts: __vm_ts(),
     });
 })();

@@ -1,6 +1,6 @@
 const VISION_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/wasm';
 const VISION_BUNDLE_URL =
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/' + 'vision_bundle.mjs';
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/vision_bundle.mjs';
 
 let FaceLandmarker = null;
 let landmarker = null;

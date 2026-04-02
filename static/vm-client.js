@@ -3,6 +3,17 @@ let vmSession = null;
 let challengeBundle = null;
 let transport = null;
 
+async function readError(response, fallbackMessage) {
+    const body = await response.text();
+    const detail = body.trim();
+
+    if (!detail) {
+        return `${fallbackMessage} (${response.status})`;
+    }
+
+    return `${fallbackMessage}: ${detail}`;
+}
+
 function loadScript(url) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -21,7 +32,9 @@ export async function createSession() {
             supportedTransports: buildTransportList(),
         }),
     });
-    if (!response.ok) throw new Error('Failed to create session');
+    if (!response.ok) {
+        throw new Error(await readError(response, 'Failed to create session'));
+    }
     vmSession = await response.json();
     return vmSession;
 }
@@ -238,7 +251,9 @@ function createPollTransport(sessionId) {
     return {
         async receive() {
             const response = await fetch(`/api/poll/${sessionId}`);
-            if (!response.ok) throw new Error('Poll failed');
+            if (!response.ok) {
+                throw new Error(await readError(response, 'Poll failed'));
+            }
             return response.json();
         },
         send() {},
@@ -270,7 +285,9 @@ export async function submitVerification(token, tokenSignature, vmResponse) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
     });
-    if (!response.ok) throw new Error('Verification failed');
+    if (!response.ok) {
+        throw new Error(await readError(response, 'Verification failed'));
+    }
     return response.json();
 }
 

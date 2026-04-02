@@ -236,20 +236,17 @@ async function runChallengeRounds() {
 
         setVideoStatus(`Round ${round + 1} of ${totalRounds}…`);
 
-        const instruction = TASK_INSTRUCTIONS[challenge.task] ?? 'Look at the camera';
+        const task = challenge.token?.task;
+        const instruction = TASK_INSTRUCTIONS[task] ?? 'Look at the camera';
 
         elements.challengeText.textContent = instruction;
-        elements.faceGuide.setAttribute('data-task', challenge.task);
+        elements.faceGuide.setAttribute('data-task', task);
         updateProgress(round, totalRounds);
 
-        const faceData = await captureMotionAndAge(challenge.task);
+        const faceData = await captureMotionAndAge();
 
         setFaceData(faceData);
-        setChallengeParams({
-            nonce: challenge.token.nonce,
-            round: challenge.round,
-            task: challenge.task,
-        });
+        setChallengeParams(challenge.token);
 
         let vmResponse;
         try {
@@ -271,7 +268,7 @@ async function runChallengeRounds() {
             return;
         }
 
-        if (!result.accepted) {
+        if (result.error) {
             setVideoStatus(`Round error: ${result.error}`);
             await sleep(1000);
         }
@@ -280,7 +277,7 @@ async function runChallengeRounds() {
     }
 }
 
-async function captureMotionAndAge(task) {
+async function captureMotionAndAge() {
     const motionHistory = [];
     const startTime = performance.now();
 
@@ -302,12 +299,8 @@ async function captureMotionAndAge(task) {
     const lastTracking = motionHistory.length > 0 ? motionHistory[motionHistory.length - 1] : null;
 
     return {
-        facePresent: motionHistory.length > 0,
         faceCount: lastTracking ? 1 : 0,
-        headPose: lastTracking?.headPose ?? null,
-        blendshapes: lastTracking?.blendshapes ?? null,
         motionHistory,
-        task,
     };
 }
 
@@ -353,7 +346,7 @@ function buildVerdictMessage(baseMessage, verdict) {
     const parts = [baseMessage];
 
     if (Number.isFinite(verdict?.estimatedAge)) {
-        parts.push(buildEstimatedAgeText(verdict.estimatedAge, verdict.ageAdjustment));
+        parts.push(buildEstimatedAgeText(verdict.estimatedAge));
     }
 
     if (verdict?.reason) {
@@ -363,13 +356,8 @@ function buildVerdictMessage(baseMessage, verdict) {
     return parts.join(' ');
 }
 
-function buildEstimatedAgeText(age, ageAdjustment = 0) {
-    const adjustmentText =
-        Number.isFinite(ageAdjustment) && ageAdjustment > 0
-            ? ` (scorer result - ${ageAdjustment})`
-            : '';
-
-    return `Estimated age: ${formatEstimatedAge(age)}${adjustmentText}.`;
+function buildEstimatedAgeText(age) {
+    return `Estimated age: ${formatEstimatedAge(age)}.`;
 }
 
 function formatEstimatedAge(age) {

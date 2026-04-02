@@ -163,65 +163,84 @@ static void add_ip(float *dst, const float *src, int n) {
 		dst[i] += src[i];
 }
 
+static float sample_padded(const uint8_t *rgba, int src_w, int crop_x,
+						   int crop_y, int crop_w, int crop_h, int pad_left,
+						   int pad_top, int side, int px, int py, int c) {
+	if (px < 0)
+		px = 0;
+	if (py < 0)
+		py = 0;
+	if (px >= side)
+		px = side - 1;
+	if (py >= side)
+		py = side - 1;
+
+	int fx = px - pad_left;
+	int fy = py - pad_top;
+	if (fx < 0 || fx >= crop_w || fy < 0 || fy >= crop_h)
+		return 0;
+
+	return (float)rgba[((crop_y + fy) * src_w + crop_x + fx) * 4 + c];
+}
+
 static void preprocess(float *out, const uint8_t *rgba, int src_w, int src_h,
 					   float box_x, float box_y, float box_w, float box_h) {
-	float margin = 0.3f;
-	float bx = box_x - box_w * margin;
-	float by = box_y - box_h * margin;
-	float bw = box_w * (1.0f + 2.0f * margin);
-	float bh = box_h * (1.0f + 2.0f * margin);
+	int crop_x = (int)floorf(box_x * src_w);
+	int crop_y = (int)floorf(box_y * src_h);
+	int crop_w = (int)floorf(box_w * src_w);
+	int crop_h = (int)floorf(box_h * src_h);
 
-	float side = bw > bh ? bw : bh;
-	float cx_f = (bx + bw * 0.5f) * src_w;
-	float cy_f = (by + bh * 0.5f) * src_h;
-	float half = side * 0.5f * (bw > bh ? src_w : src_h);
+	if (crop_x < 0) {
+		crop_w += crop_x;
+		crop_x = 0;
+	}
+	if (crop_y < 0) {
+		crop_h += crop_y;
+		crop_y = 0;
+	}
+	if (crop_x + crop_w > src_w)
+		crop_w = src_w - crop_x;
+	if (crop_y + crop_h > src_h)
+		crop_h = src_h - crop_y;
+	if (crop_w < 1)
+		crop_w = 1;
+	if (crop_h < 1)
+		crop_h = 1;
 
-	float x0f = cx_f - half;
-	float y0f = cy_f - half;
-	float scale = (2.0f * half) / IN;
+	int side = crop_w > crop_h ? crop_w : crop_h;
+	int diff_w = side - crop_w;
+	int diff_h = side - crop_h;
+	int pad_left = diff_w - (int)roundf(diff_w * 0.5f);
+	int pad_top = diff_h - (int)roundf(diff_h * 0.5f);
+
+	float scale = (float)side / IN;
+	static const float mean_rgb[3] = {122.782f, 117.001f, 104.298f};
 
 	for (int y = 0; y < IN; y++) {
-		float sy = y0f + (y + 0.5f) * scale - 0.5f;
-		int y0 = (int)floorf(sy);
-		int y1 = y0 + 1;
-		float fy = sy - y0;
-		if (fy < 0)
-			fy = 0;
-		if (fy > 1)
-			fy = 1;
-		if (y0 < 0)
-			y0 = 0;
-		if (y1 < 0)
-			y1 = 0;
-		if (y0 >= src_h)
-			y0 = src_h - 1;
-		if (y1 >= src_h)
-			y1 = src_h - 1;
+		float sy = y * scale;
+		int sy0 = (int)floorf(sy);
+		int sy1 = sy0 + 1;
+		float fy = sy - sy0;
 
 		for (int x = 0; x < IN; x++) {
-			float sx = x0f + (x + 0.5f) * scale - 0.5f;
-			int x0 = (int)floorf(sx);
-			int x1 = x0 + 1;
-			float fx = sx - x0;
-			if (fx < 0)
-				fx = 0;
-			if (fx > 1)
-				fx = 1;
-			if (x0 < 0)
-				x0 = 0;
-			if (x1 < 0)
-				x1 = 0;
-			if (x0 >= src_w)
-				x0 = src_w - 1;
-			if (x1 >= src_w)
-				x1 = src_w - 1;
+			float sx = x * scale;
+			int sx0 = (int)floorf(sx);
+			int sx1 = sx0 + 1;
+			float fx = sx - sx0;
 
-			static const float mean_rgb[3] = {122.782f, 117.001f, 104.298f};
 			for (int c = 0; c < 3; c++) {
-				float v00 = rgba[(y0 * src_w + x0) * 4 + c];
-				float v01 = rgba[(y0 * src_w + x1) * 4 + c];
-				float v10 = rgba[(y1 * src_w + x0) * 4 + c];
-				float v11 = rgba[(y1 * src_w + x1) * 4 + c];
+				float v00 =
+					sample_padded(rgba, src_w, crop_x, crop_y, crop_w, crop_h,
+								  pad_left, pad_top, side, sx0, sy0, c);
+				float v01 =
+					sample_padded(rgba, src_w, crop_x, crop_y, crop_w, crop_h,
+								  pad_left, pad_top, side, sx1, sy0, c);
+				float v10 =
+					sample_padded(rgba, src_w, crop_x, crop_y, crop_w, crop_h,
+								  pad_left, pad_top, side, sx0, sy1, c);
+				float v11 =
+					sample_padded(rgba, src_w, crop_x, crop_y, crop_w, crop_h,
+								  pad_left, pad_top, side, sx1, sy1, c);
 				float v = v00 * (1 - fx) * (1 - fy) + v01 * fx * (1 - fy) +
 						  v10 * (1 - fx) * fy + v11 * fx * fy;
 				out[(y * IN + x) * 3 + c] = (v - mean_rgb[c]) / 256.0f;

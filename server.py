@@ -8,8 +8,8 @@ import struct
 import subprocess
 import threading
 import time
-import uuid
 from pathlib import Path
+from typing import cast
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
 from flask import Flask, abort, jsonify, request, send_from_directory
@@ -29,7 +29,6 @@ SESSION_TTL = 300
 SUPPORTED_TRANSPORTS = ["websocket", "poll"]
 AGE_THRESHOLD = 18
 FAIL_FLOOR = 15
-AGE_ADJUSTMENT = 2
 REQUIRED_LIVENESS_PASSES = 2
 
 LIVENESS_TASKS = [
@@ -82,15 +81,20 @@ def verify_token_sig(token, signature_hex):
         return False
 
 
-def pick_tasks(nonce, count=3):
-    digest = hashlib.sha256(nonce.encode()).digest()
-    chosen = []
-    for i in range(count):
-        idx = digest[i] % len(LIVENESS_TASKS)
-        while idx in [LIVENESS_TASKS.index(t) for t in chosen]:
-            idx = (idx + 1) % len(LIVENESS_TASKS)
-        chosen.append(LIVENESS_TASKS[idx])
-    return chosen
+def generate_session_id():
+    token = base64.urlsafe_b64encode(secrets.token_bytes(12)).decode()
+    return token.rstrip("=")
+
+
+def pick_task(session_id, round_num):
+    ordered_tasks = sorted(
+        LIVENESS_TASKS,
+        key=lambda task: hmac_sign(
+            server_secret,
+            f"{session_id}:{task}".encode(),
+        ),
+    )
+    return ordered_tasks[round_num % len(ordered_tasks)]
 
 
 def decrypt_vm_response(response_bytes, encrypt_key, sign_key):
@@ -204,7 +208,7 @@ def negotiate_transport(client_transports):
 def build_challenge(session_id, session):
     round_num = session["current_round"]
     nonce = secrets.token_hex(16)
-    task = session["tasks"][round_num % len(session["tasks"])]
+    task = pick_task(session_id, round_num)
 
     token = {
         "session_id": session_id,
@@ -216,12 +220,9 @@ def build_challenge(session_id, session):
         "ttl": CHALLENGE_TTL,
     }
     token_sig = sign_token(token)
-    session["current_token"] = token
 
     return {
         "type": "challenge",
-        "round": round_num,
-        "task": task,
         "token": token,
         "tokenSignature": token_sig,
     }
@@ -283,33 +284,24 @@ def compute_trimmed_mean(values):
     return sum(trimmed) / len(trimmed)
 
 
-def build_verdict(outcome, estimated_age=None, reason=None, raw_estimated_age=None):
-    verdict = {
-        "outcome": outcome,
-        "reason": reason,
-        "passThreshold": AGE_THRESHOLD,
-        "ageAdjustment": AGE_ADJUSTMENT,
-    }
+def build_verdict(outcome, estimated_age=None, reason=None):
+    verdict = {"outcome": outcome}
 
     if estimated_age is not None:
         verdict["estimatedAge"] = round(estimated_age, 1)
 
-    if raw_estimated_age is not None:
-        verdict["rawEstimatedAge"] = round(raw_estimated_age, 1)
+    if reason:
+        verdict["reason"] = reason
 
     return verdict
 
 
 def compute_verdict(results):
-    adjusted_ages = [
+    estimated_ages = [
         r["age"] for r in results if isinstance(r.get("age"), (int, float))
     ]
-    raw_ages = [
-        r["rawAge"] for r in results if isinstance(r.get("rawAge"), (int, float))
-    ]
 
-    estimated_age = compute_trimmed_mean(adjusted_ages)
-    raw_estimated_age = compute_trimmed_mean(raw_ages)
+    estimated_age = compute_trimmed_mean(estimated_ages)
 
     liveness_passed = sum(1 for r in results if r.get("liveness_ok"))
     if liveness_passed < REQUIRED_LIVENESS_PASSES:
@@ -317,31 +309,23 @@ def compute_verdict(results):
             f"Only {liveness_passed} of {MAX_ROUNDS} liveness checks passed. "
             f"{REQUIRED_LIVENESS_PASSES} are required"
         )
-        return build_verdict("fail", estimated_age, reason, raw_estimated_age)
+        return build_verdict("fail", estimated_age, reason)
 
     if estimated_age is None:
-        return build_verdict(
-            "retry",
-            reason="No reliable age estimate was produced",
-            raw_estimated_age=raw_estimated_age,
-        )
+        return build_verdict("retry", reason="No reliable age estimate was produced")
 
     if estimated_age >= AGE_THRESHOLD:
-        return build_verdict("pass", estimated_age, None, raw_estimated_age)
+        return build_verdict("pass", estimated_age)
 
     if estimated_age < FAIL_FLOOR:
         reason = (
-            f"Pass threshold stays at {AGE_THRESHOLD}. Estimated age is the "
-            f"scorer result minus {AGE_ADJUSTMENT}, and values below "
-            f"{FAIL_FLOOR} fail"
+            f"Pass threshold stays at {AGE_THRESHOLD}. "
+            f"Values below {FAIL_FLOOR} fail"
         )
-        return build_verdict("fail", estimated_age, reason, raw_estimated_age)
+        return build_verdict("fail", estimated_age, reason)
 
-    reason = (
-        f"Pass threshold stays at {AGE_THRESHOLD}. Estimated age is the "
-        f"scorer result minus {AGE_ADJUSTMENT}"
-    )
-    return build_verdict("retry", estimated_age, reason, raw_estimated_age)
+    reason = f"Pass threshold stays at {AGE_THRESHOLD}"
+    return build_verdict("retry", estimated_age, reason)
 
 
 @app.route("/")
@@ -381,25 +365,19 @@ def create_session():
         build_id = current_build_id
         manifest = builds[build_id]
 
-    session_id = str(uuid.uuid4())
-    session_nonce = secrets.token_hex(16)
-    tasks = pick_tasks(session_nonce)
-
+    session_id = generate_session_id()
     challenge_ready = threading.Event()
     challenge_ready.set()
 
     with session_lock:
         sessions[session_id] = {
             "build_id": build_id,
-            "nonce": session_nonce,
-            "tasks": tasks,
             "current_round": 0,
             "results": [],
             "created_at": time.time(),
             "completed": False,
             "verdict": None,
             "challenge_ready": challenge_ready,
-            "current_token": None,
             "transport": transport,
         }
 
@@ -408,20 +386,16 @@ def create_session():
     for model_id, info in models_info.items():
         model_urls[model_id] = {
             "url": f"/vm/models/{info['file']}",
-            "originalName": info["originalName"],
-            "size": info["size"],
         }
 
     return jsonify(
         {
             "sessionId": session_id,
-            "buildId": build_id,
             "wasmJs": "/vm/vm.js",
             "wasmBin": "/vm/vm.wasm",
             "loaderJs": "/vm/loader.js",
             "challengeVmbc": "/vm/challenge.vmbc",
             "rounds": MAX_ROUNDS,
-            "tasks": tasks,
             "exports": manifest["exports"],
             "models": model_urls,
             "transport": transport,
@@ -433,8 +407,9 @@ def create_session():
 def poll_challenge(session_id):
     with session_lock:
         session = sessions.get(session_id)
-    if not session:
+    if session is None:
         abort(404, description="Session not found")
+    session = cast(dict, session)
 
     if session["completed"]:
         return jsonify(
@@ -458,8 +433,9 @@ def poll_challenge(session_id):
 def verify_round(session_id):
     with session_lock:
         session = sessions.get(session_id)
-    if not session:
+    if session is None:
         abort(404, description="Session not found")
+    session = cast(dict, session)
     if session["completed"]:
         abort(400, description="Session completed")
 
@@ -487,16 +463,18 @@ def verify_round(session_id):
     build_id = session["build_id"]
     with build_lock:
         manifest = builds.get(build_id)
-    if not manifest:
+    if manifest is None:
         abort(410, description="Build expired")
+    manifest = cast(dict, manifest)
 
     response_bytes = base64.b64decode(response_b64)
     encrypt_key = bytes.fromhex(manifest["keys"]["encrypt"])
     sign_key = bytes.fromhex(manifest["keys"]["sign"])
 
     plaintext = decrypt_vm_response(response_bytes, encrypt_key, sign_key)
-    if not plaintext:
+    if plaintext is None:
         abort(403, description="VM verification failed")
+    plaintext = cast(str, plaintext)
 
     result = json.loads(plaintext)
     if not isinstance(result, dict):
@@ -523,9 +501,7 @@ def verify_round(session_id):
             next_challenge = build_challenge(session_id, session)
         return jsonify(
             {
-                "accepted": False,
                 "error": result["error"],
-                "round": session["current_round"],
                 "complete": False,
                 "nextChallenge": next_challenge,
             }
@@ -541,7 +517,7 @@ def verify_round(session_id):
     integrity = result.get("integrity")
     if not isinstance(integrity, (int, float)):
         abort(403, description="Missing integrity")
-    result["integrity"] = int(integrity)
+    result["integrity"] = int(cast(int | float, integrity))
 
     with session_lock:
         if session["current_round"] != expected_round:
@@ -555,33 +531,21 @@ def verify_round(session_id):
         if session["current_round"] >= MAX_ROUNDS:
             session["completed"] = True
             session["verdict"] = compute_verdict(session["results"])
-            return jsonify(
-                {
-                    "accepted": True,
-                    "complete": True,
-                    "verdict": session["verdict"],
-                }
-            )
+            return jsonify({"complete": True, "verdict": session["verdict"]})
 
         next_challenge = build_challenge(session_id, session)
 
-    return jsonify(
-        {
-            "accepted": True,
-            "complete": False,
-            "round": session["current_round"],
-            "nextChallenge": next_challenge,
-        }
-    )
+    return jsonify({"complete": False, "nextChallenge": next_challenge})
 
 
 @sock.route("/api/ws/<session_id>")
 def ws_challenge(ws, session_id):
     with session_lock:
         session = sessions.get(session_id)
-    if not session:
+    if session is None:
         ws.send(json.dumps({"error": "Session not found"}))
         return
+    session = cast(dict, session)
     if session["transport"] != "websocket":
         ws.send(json.dumps({"error": "WebSocket not negotiated"}))
         return
@@ -603,16 +567,17 @@ def ws_challenge(ws, session_id):
 
         with session_lock:
             session = sessions.get(session_id)
-        if not session:
+        if session is None:
             ws.send(json.dumps({"error": "Session expired"}))
             return
+        session = cast(dict, session)
 
         result = process_verify(session_id, session, body)
         ws.send(json.dumps(result))
 
         if result.get("complete"):
             return
-        if result.get("error") and not result.get("accepted", True):
+        if result.get("error") and not result.get("nextChallenge"):
             return
 
 
@@ -640,16 +605,18 @@ def process_verify(session_id, session, body):
     build_id = session["build_id"]
     with build_lock:
         manifest = builds.get(build_id)
-    if not manifest:
+    if manifest is None:
         return {"error": "Build expired"}
+    manifest = cast(dict, manifest)
 
     response_bytes = base64.b64decode(response_b64)
     encrypt_key = bytes.fromhex(manifest["keys"]["encrypt"])
     sign_key = bytes.fromhex(manifest["keys"]["sign"])
 
     plaintext = decrypt_vm_response(response_bytes, encrypt_key, sign_key)
-    if not plaintext:
+    if plaintext is None:
         return {"error": "VM verification failed"}
+    plaintext = cast(str, plaintext)
 
     result = json.loads(plaintext)
     if not isinstance(result, dict):
@@ -675,9 +642,7 @@ def process_verify(session_id, session, body):
             session["current_round"] += 1
             next_challenge = build_challenge(session_id, session)
         return {
-            "accepted": False,
             "error": result["error"],
-            "round": session["current_round"],
             "complete": False,
             "nextChallenge": next_challenge,
         }
@@ -692,7 +657,7 @@ def process_verify(session_id, session, body):
     integrity = result.get("integrity")
     if not isinstance(integrity, (int, float)):
         return {"error": "Missing integrity"}
-    result["integrity"] = int(integrity)
+    result["integrity"] = int(cast(int | float, integrity))
 
     with session_lock:
         if session["current_round"] != expected_round:
@@ -703,20 +668,11 @@ def process_verify(session_id, session, body):
         if session["current_round"] >= MAX_ROUNDS:
             session["completed"] = True
             session["verdict"] = compute_verdict(session["results"])
-            return {
-                "accepted": True,
-                "complete": True,
-                "verdict": session["verdict"],
-            }
+            return {"complete": True, "verdict": session["verdict"]}
 
         next_challenge = build_challenge(session_id, session)
 
-    return {
-        "accepted": True,
-        "complete": False,
-        "round": session["current_round"],
-        "nextChallenge": next_challenge,
-    }
+    return {"complete": False, "nextChallenge": next_challenge}
 
 
 @app.after_request

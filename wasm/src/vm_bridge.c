@@ -114,22 +114,24 @@ static JSValue js_vm_get_challenge(JSContext *ctx, JSValueConst this_val,
 }
 
 static char *call_browser_fn(const char *fn_name, const char *arg) {
-	return (char *)EM_ASM_INT(
-		{
-			var name = UTF8ToString($0);
-			var param = UTF8ToString($1);
-			var fn = window.__vmBridge && window.__vmBridge[name];
-			if (!fn)
-				return 0;
-			var result = fn(param);
-			if (typeof result != = "string")
-				return 0;
-			var len = lengthBytesUTF8(result) + 1;
-			var ptr = _malloc(len);
-			stringToUTF8(result, ptr, len);
-			return ptr;
-		},
-		fn_name, arg);
+	// clang-format off
+    return (char *)EM_ASM_INT(
+        {
+            var name = UTF8ToString($0);
+            var param = UTF8ToString($1);
+            var fn = window.__vmBridge && window.__vmBridge[name];
+            if (!fn)
+                return 0;
+            var result = fn(param);
+            if (typeof result !== "string")
+                return 0;
+            var len = lengthBytesUTF8(result) + 1;
+            var ptr = _malloc(len);
+            stringToUTF8(result, ptr, len);
+            return ptr;
+        },
+        fn_name, arg);
+	// clang-format on
 }
 
 static JSValue js_vm_estimate_age(JSContext *ctx, JSValueConst this_val,

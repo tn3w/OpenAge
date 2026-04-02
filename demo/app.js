@@ -301,7 +301,7 @@ function buildAgeResultMessage(baseMessage, decision) {
     const parts = [baseMessage];
 
     if (Number.isFinite(decision?.estimatedAge)) {
-        parts.push(buildEstimatedAgeText(decision.estimatedAge, decision.ageAdjustment));
+        parts.push(buildEstimatedAgeText(decision.estimatedAge));
     }
 
     if (decision?.reason) {
@@ -315,13 +315,8 @@ function formatEstimatedAge(age) {
     return age.toFixed(1).replace(/\.0$/, '');
 }
 
-function buildEstimatedAgeText(age, ageAdjustment = 0) {
-    const adjustmentText =
-        Number.isFinite(ageAdjustment) && ageAdjustment > 0
-            ? ` (scorer result - ${ageAdjustment})`
-            : '';
-
-    return `Estimated age: ${formatEstimatedAge(age)}${adjustmentText}.`;
+function buildEstimatedAgeText(age) {
+    return `Estimated age: ${formatEstimatedAge(age)}.`;
 }
 
 function buildLivenessResultMessage(baseMessage) {
