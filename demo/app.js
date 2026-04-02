@@ -1,6 +1,6 @@
 import { startCamera, captureFrame, stopCamera, checkFrameQuality } from './camera.js';
 import { ensureModels, getMediaPipeModelBuffer, clearCache } from './model-store.js';
-import { initTracker, track, destroyTracker } from './face-tracker.js';
+import { initTracker, track, destroyTracker, preloadVision } from './face-tracker.js';
 import {
     createLivenessSession,
     processFrame,
@@ -74,10 +74,6 @@ async function loadModels() {
         setStatus('Initializing age estimator…');
         await initAgeEstimator();
 
-        setStatus('Initializing face tracker…');
-        const modelBuffer = await getMediaPipeModelBuffer();
-        await initTracker(modelBuffer);
-
         transition(State.READY);
     } catch (error) {
         setStatus(`Setup failed: ${error.message}`);
@@ -137,9 +133,16 @@ function transition(newState) {
 
 async function startCameraFlow() {
     try {
+        const modelBuffer = await getMediaPipeModelBuffer();
+        await preloadVision();
+
         await startCamera(elements.video);
         elements.overlay.width = elements.video.videoWidth;
         elements.overlay.height = elements.video.videoHeight;
+
+        setStatus('Initializing face tracker…');
+        await initTracker(modelBuffer);
+
         transition(State.POSITIONING);
     } catch {
         showResult('unsupported', 'Camera access denied or unavailable.');
@@ -304,9 +307,6 @@ function onStart() {
 }
 
 async function onRetry() {
-    setStatus('Reinitializing tracker…');
-    const modelBuffer = await getMediaPipeModelBuffer();
-    await initTracker(modelBuffer);
     transition(State.CAMERA);
 }
 

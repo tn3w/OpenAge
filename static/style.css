@@ -148,7 +148,7 @@ body {
     max-width: 420px;
     aspect-ratio: 5 / 6;
     perspective: 400px;
-    color: rgba(15, 23, 42, 0.72);
+    color: rgba(255, 255, 255, 0.45);
     pointer-events: none;
     z-index: 2;
     transition: opacity 0.4s ease;
