@@ -8,9 +8,9 @@ button binding.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/openage?label=npm" alt="Version">
-  <img src="https://img.shields.io/npm/dm/openage" alt="Downloads">
-  <img src="https://img.shields.io/npm/l/openage" alt="License">
+    <img src="https://img.shields.io/npm/v/%40tn3w%2Fopenage?label=npm" alt="Version">
+    <img src="https://img.shields.io/npm/dm/%40tn3w%2Fopenage" alt="Downloads">
+    <img src="https://img.shields.io/npm/l/%40tn3w%2Fopenage" alt="License">
   <a href="https://tn3w.github.io/OpenAge/"><img src="https://img.shields.io/badge/demo-github%20pages-black" alt="Demo"></a>
 </p>
 
@@ -25,11 +25,11 @@ button binding.
 ## Install
 
 ```bash
-npm install openage
+npm install @tn3w/openage
 ```
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/openage/dist/openage.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tn3w/openage/dist/openage.min.js"></script>
 ```
 
 ## Quick Start
@@ -39,7 +39,7 @@ npm install openage
 ```html
 <div class="openage" data-sitekey="ag_live_xxxx" data-callback="onVerified"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/openage/dist/openage.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tn3w/openage/dist/openage.min.js"></script>
 <script>
     function onVerified(token) {
         console.log('verified', token);
@@ -50,7 +50,7 @@ npm install openage
 ### npm
 
 ```js
-import OpenAge from 'openage';
+import OpenAge from '@tn3w/openage';
 
 OpenAge.render('#gate', {
     mode: 'serverless',
@@ -118,7 +118,7 @@ python server.py
 ```
 
 The repository also includes `demo/`, a minimal GitHub Pages build that loads
-the jsDelivr bundle in embedded `serverless` mode.
+the jsDelivr bundle for `@tn3w/openage` in embedded `serverless` mode.
 
 ## Development
 

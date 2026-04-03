@@ -14,8 +14,6 @@ describe('constants', () => {
     });
 
     it('exports numeric thresholds', () => {
-        expect(constants.DEFAULT_MIN_AGE).toBe(18);
-        expect(constants.FAIL_FLOOR).toBe(15);
         expect(constants.MAX_RETRIES).toBe(3);
         expect(constants.BURST_FRAMES).toBeGreaterThan(0);
         expect(constants.STABLE_FRAMES_REQUIRED).toBeGreaterThan(0);

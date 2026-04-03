@@ -19,7 +19,11 @@ describe('startPositioning', () => {
         await new Promise((r) => setTimeout(r, 200));
         handle.cancel();
 
-        expect(onStatus).toHaveBeenCalledWith(expect.stringContaining('No face'));
+        expect(
+            onStatus.mock.calls.some(([text]) =>
+                ['No face detected', 'Look at the camera'].includes(text)
+            )
+        ).toBe(true);
     });
 
     it('calls onReady after stable frames', async () => {
@@ -60,6 +64,10 @@ describe('startPositioning', () => {
 
         await new Promise((r) => setTimeout(r, 200));
 
-        expect(onStatus).toHaveBeenCalledWith(expect.stringContaining('Multiple'));
+        expect(
+            onStatus.mock.calls.some(([text]) =>
+                ['Multiple faces detected', 'Only one person please'].includes(text)
+            )
+        ).toBe(true);
     });
 });

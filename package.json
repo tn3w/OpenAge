@@ -1,5 +1,5 @@
 {
-    "name": "openage",
+    "name": "@tn3w/openage",
     "version": "1.0.0",
     "description": "Privacy-first age verification widget. On-device face analysis with liveness detection.",
     "type": "module",
@@ -20,6 +20,9 @@
         "dist/",
         "src/"
     ],
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "build": "rollup -c",
         "dev": "rollup -c -w",
@@ -42,7 +45,7 @@
     "license": "Apache-2.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/tn3w/OpenAge"
+        "url": "git+https://github.com/tn3w/OpenAge.git"
     },
     "devDependencies": {
         "@rollup/plugin-terser": "^1.0.0",

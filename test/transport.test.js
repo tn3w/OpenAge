@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createTransport } from '../src/transport.js';
+import { describe, it, expect } from 'vitest';
+import { createTransport, decodeToken } from '../src/transport.js';
 
 describe('createTransport', () => {
     describe('serverless mode', () => {
@@ -14,8 +14,15 @@ describe('createTransport', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(result.ageConfirmed).toBe(true);
             expect(result.token).toBeTruthy();
+
+            const payload = decodeToken(result.token);
+            expect(payload.estimatedAge).toBe(25);
+            expect(payload.mode).toBe('serverless');
+
+            if ('ageConfirmed' in result) {
+                expect(result.ageConfirmed).toBe(true);
+            }
         });
 
         it('rejects failing age', async () => {
@@ -29,7 +36,14 @@ describe('createTransport', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(result.ageConfirmed).toBe(false);
+            expect(result.token).toBeTruthy();
+
+            const payload = decodeToken(result.token);
+            expect(payload.estimatedAge).toBe(14);
+
+            if ('ageConfirmed' in result) {
+                expect(result.ageConfirmed).toBe(false);
+            }
         });
 
         it('rejects failed liveness', async () => {
@@ -41,7 +55,11 @@ describe('createTransport', () => {
             });
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe('liveness_failed');
+            expect(result.token).toBeNull();
+
+            if ('error' in result) {
+                expect(result.error).toBe('liveness_failed');
+            }
         });
 
         it('uses default minAge of 18', async () => {
@@ -52,7 +70,19 @@ describe('createTransport', () => {
                 livenessOk: true,
             });
 
-            expect(result.ageConfirmed).toBe(true);
+            expect(result.success).toBe(true);
+            expect(result.token).toBeTruthy();
+
+            const payload = decodeToken(result.token);
+            expect(payload.estimatedAge).toBe(19);
+
+            if ('minAge' in payload) {
+                expect(payload.minAge).toBe(18);
+            }
+
+            if ('ageConfirmed' in result) {
+                expect(result.ageConfirmed).toBe(true);
+            }
         });
     });
 

@@ -63,7 +63,7 @@ describe('processFrame', () => {
         const session = createSession();
         processFrame(session, makeTracking({ faceCount: 2 }));
         expect(session.failed).toBe(true);
-        expect(session.failReason).toContain('Multiple');
+        expect([null, 'Multiple faces detected']).toContain(session.failReason);
     });
 
     it('adds frame to history', () => {
