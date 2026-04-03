@@ -20,9 +20,6 @@
         "dist/",
         "src/"
     ],
-    "publishConfig": {
-        "access": "public"
-    },
     "scripts": {
         "build": "rollup -c",
         "dev": "rollup -c -w",
