@@ -1,4 +1,4 @@
-<p align="center"><img src="https://github.com/tn3w/OpenAge/releases/download/img/openage.webp" alt="OpenAge - Privacy-first age verification for the web"></p>
+<p align="center"><a href="https://tn3w.github.io/OpenAge/"><img src="https://github.com/tn3w/OpenAge/releases/download/img/openage.webp" alt="OpenAge - Privacy-first age verification for the web"></a></p>
 
 <h3 align="center">Privacy-first age verification for the web</h3>
 <p align="center">
@@ -8,9 +8,9 @@ button binding.
 </p>
 
 <p align="center">
-    <img src="https://img.shields.io/npm/v/%40tn3w%2Fopenage?label=npm" alt="Version">
-    <img src="https://img.shields.io/npm/dm/%40tn3w%2Fopenage" alt="Downloads">
-    <img src="https://img.shields.io/npm/l/%40tn3w%2Fopenage" alt="License">
+    <a href="https://www.npmjs.com/package/@tn3w/openage"><img src="https://img.shields.io/npm/v/%40tn3w%2Fopenage?label=npm" alt="Version"></a>
+    <a href="https://www.npmjs.com/package/@tn3w/openage"><img src="https://img.shields.io/npm/dm/%40tn3w%2Fopenage" alt="Downloads"></a>
+    <a href="https://www.npmjs.com/package/@tn3w/openage"><img src="https://img.shields.io/npm/l/%40tn3w%2Fopenage" alt="License"></a>
   <a href="https://tn3w.github.io/OpenAge/"><img src="https://img.shields.io/badge/demo-github%20pages-black" alt="Demo"></a>
 </p>
 

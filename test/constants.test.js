@@ -8,9 +8,26 @@ describe('constants', () => {
     });
 
     it('exports CDN URLs', () => {
-        expect(constants.MEDIAPIPE_CDN).toContain('jsdelivr');
-        expect(constants.FACEAPI_CDN).toContain('jsdelivr');
-        expect(constants.MEDIAPIPE_MODEL).toContain('mediapipe-models');
+        expect(constants.MEDIAPIPE_CDN).toBe(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17'
+        );
+        expect(constants.MEDIAPIPE_WASM).toBe(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/wasm'
+        );
+        expect(constants.MEDIAPIPE_VISION).toBe(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/vision_bundle.mjs'
+        );
+        expect(constants.MEDIAPIPE_MODEL).toBe(
+            'https://storage.googleapis.com/mediapipe-models/' +
+                'face_landmarker/face_landmarker/float16/1/' +
+                'face_landmarker.task'
+        );
+        expect(constants.FACEAPI_CDN).toBe(
+            'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js'
+        );
+        expect(constants.FACEAPI_MODEL_CDN).toBe(
+            'https://cdn.jsdelivr.net/gh/' + 'justadudewhohacks/face-api.js@master/weights'
+        );
     });
 
     it('exports numeric thresholds', () => {

@@ -8,13 +8,14 @@ export const MEDIAPIPE_VISION = `${MEDIAPIPE_CDN}/vision_bundle.mjs`;
 
 export const MEDIAPIPE_MODEL =
     'https://storage.googleapis.com/mediapipe-models/' +
-    'face_landmarker/face_landmarker/float16/latest/' +
+    'face_landmarker/face_landmarker/float16/1/' +
     'face_landmarker.task';
 
 export const FACEAPI_CDN =
     'https://cdn.jsdelivr.net/npm/' + 'face-api.js@0.22.2/dist/face-api.min.js';
 
-export const FACEAPI_MODEL_CDN = 'https://cdn.jsdelivr.net/npm/' + 'face-api.js@0.22.2/weights';
+export const FACEAPI_MODEL_CDN =
+    'https://cdn.jsdelivr.net/gh/' + 'justadudewhohacks/face-api.js@master/weights';
 
 export const MAX_RETRIES = 3;
 export const BURST_FRAMES = 5;
