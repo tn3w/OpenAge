@@ -1,140 +1,141 @@
-# OpenAge
+<p align="center"><img src="https://github.com/tn3w/OpenAge/releases/download/img/openage.webp" alt="OpenAge - Privacy-first age verification for the web"></p>
 
-OpenAge is a privacy-first age check that keeps face processing on the device
-but still gives the server something it can verify.
+<h3 align="center">Privacy-first age verification for the web</h3>
+<p align="center">
+OpenAge runs face tracking, liveness checks, and age estimation on-device.
+Use it as a drop-in age gate with a checkbox-style widget, modal flow, or
+button binding.
+</p>
 
-Most age gates are weak in one of two ways: they are trivial to patch in
-browser JavaScript, or they send sensitive face data to a backend. OpenAge is
-that middle path.
+<p align="center">
+  <img src="https://img.shields.io/npm/v/openage?label=npm" alt="Version">
+  <img src="https://img.shields.io/npm/dm/openage" alt="Downloads">
+  <img src="https://img.shields.io/npm/l/openage" alt="License">
+  <a href="https://tn3w.github.io/OpenAge/"><img src="https://img.shields.io/badge/demo-github%20pages-black" alt="Demo"></a>
+</p>
 
-Age inference and liveness evaluation run locally.
+## At a Glance
 
-Trust comes from compiled code, encrypted VM policy, signed challenges, sealed
-responses, and server-side revalidation.
+| Browser-side            | Server-backed              | UI                         |
+| ----------------------- | -------------------------- | -------------------------- |
+| On-device face analysis | Optional WASM verification | Embedded widget + popup    |
+| No raw camera upload    | Signed sessions and tokens | Normal, compact, invisible |
+| Serverless soft gates   | Hosted or custom backend   | Auto, light, dark          |
 
-Production blur and lighting checks now run in the VM path instead of browser
-JavaScript.
+## Install
 
-## Why This Project Matters
-
-- It keeps camera data local.
-- It avoids trusting plain browser JavaScript.
-- It makes simple tampering much harder.
-- It makes still images and naive replays much harder to use successfully.
-- It shows a practical pattern for local inference with verifiable execution.
-
-## The Idea
-
-```mermaid
-flowchart LR
-    Camera[Camera]
-    Tracker[Local face tracking]
-    VM[Polymorphic WASM VM]
-    Age[Compiled C age model]
-    Seal[Encrypted + signed result]
-    Server[Server validation]
-    Verdict[Pass / Retry / Fail]
-
-    Camera --> Tracker
-    Tracker --> VM
-    VM --> Age
-    Age --> VM
-    VM --> Seal
-    Seal --> Server
-    Server --> Verdict
+```bash
+npm install openage
 ```
 
-The browser handles sensing.
-
-The VM handles trusted client-side logic.
-
-The server accepts only sealed VM output that matches the signed challenge and
-passes a second liveness check.
-
-## Why It Is Harder To Fake
-
-```mermaid
-flowchart LR
-    A[Patch browser JS] --> B[Does not change compiled C model]
-    C[Forge result] --> D[Rejected without valid HMAC]
-    E[Replay old payload] --> F[Blocked by nonce, round, and TTL]
-    G[Use still image] --> H[Challenge liveness fails]
-    I[Use simple replay] --> J[Per-round task + server recheck]
+```html
+<script src="https://cdn.jsdelivr.net/npm/openage/dist/openage.min.js"></script>
 ```
-
-This is not perfect anti-spoofing.
-
-It is a stronger trust design than a normal front-end-only check.
-
-## Trust Boundary
-
-| Part            | Where it runs         | Why                                 |
-| --------------- | --------------------- | ----------------------------------- |
-| Face tracking   | Browser               | Uses local GPU and camera           |
-| Age inference   | Compiled C in WASM    | Harder to intercept than JS         |
-| Age policy      | Encrypted VM bytecode | Harder to patch in client code      |
-| Liveness policy | VM + server           | Client and server must agree        |
-| Final verdict   | Server                | The browser is not the trust anchor |
-
-## Verification Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant V as WASM VM
-    participant S as Server
-
-    B->>S: Start session
-    S->>B: VM assets + current challenge
-    B->>B: Track face locally
-    B->>V: Send motion history + challenge
-    V->>V: Run age + liveness logic
-    V->>S: Sealed response
-    S->>S: Verify token, decrypt, recheck liveness
-    S->>B: Next challenge or final verdict
-```
-
-Current policy:
-
-- Pass at `>= 18`
-- Fail below `15`
-- Retry between `15` and `18`
-- Require at least `2 of 3` liveness rounds to pass
 
 ## Quick Start
 
+### CDN
+
+```html
+<div class="openage" data-sitekey="ag_live_xxxx" data-callback="onVerified"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/openage/dist/openage.min.js"></script>
+<script>
+    function onVerified(token) {
+        console.log('verified', token);
+    }
+</script>
+```
+
+### npm
+
+```js
+import OpenAge from 'openage';
+
+OpenAge.render('#gate', {
+    mode: 'serverless',
+    minAge: 18,
+    callback: (token) => console.log(token),
+    errorCallback: (error) => console.error(error),
+});
+```
+
+### Bound Flow
+
+```js
+OpenAge.bind('#buy-btn', {
+    sitekey: 'ag_live_xxxx',
+    callback: (token) => submitForm(token),
+});
+```
+
+## Modes
+
+| Mode         | Backend        | Use case                 |
+| ------------ | -------------- | ------------------------ |
+| `serverless` | none           | client-only soft gates   |
+| `sitekey`    | OpenAge hosted | production verification  |
+| `custom`     | your server    | self-hosted verification |
+
+`serverless` keeps everything local and returns a client-signed token.
+`sitekey` and `custom` use a server session and a WASM VM for stronger checks.
+
+## Core API
+
+```js
+OpenAge.render(container, params);
+OpenAge.open(params);
+OpenAge.bind(element, params);
+
+OpenAge.reset(widgetId);
+OpenAge.remove(widgetId);
+OpenAge.getToken(widgetId);
+OpenAge.execute(widgetId);
+
+await OpenAge.challenge(params);
+```
+
+## Main Params
+
+| Param     | Values                            |
+| --------- | --------------------------------- |
+| `mode`    | `serverless`, `sitekey`, `custom` |
+| `theme`   | `light`, `dark`, `auto`           |
+| `size`    | `normal`, `compact`, `invisible`  |
+| `minAge`  | number, default `18`              |
+| `sitekey` | required for hosted mode          |
+| `server`  | required for custom mode          |
+
+## Demo
+
+- Static demo: https://tn3w.github.io/OpenAge/
+- Local server demo:
+
 ```bash
-git submodule update --init
-source /path/to/emsdk/emsdk_env.sh
+cd server
 pip install -r requirements.txt
 python server.py
 ```
 
-Open `http://localhost:8000`.
+The repository also includes `demo/`, a minimal GitHub Pages build that loads
+the jsDelivr bundle in embedded `serverless` mode.
 
-The first run builds the WASM VM, embeds the age model, and prepares encrypted
-assets.
+## Development
 
-## Repo Map
+```bash
+npm install
+npm test
+npm run build
+npm run dev
+```
 
-- `server.py`: session flow, token signing, VM verification, final verdicts
-- `static/`: production web client and WASM loader
-- `wasm/`: VM bytecode, C inference, crypto, anti-debug, build pipeline
-- `demo/`: browser-only demo without the trust guarantees of the full path
+Optional server:
 
-## Properties
-
-- No camera frames are uploaded.
-- Age inference stays on device.
-- The liveness task is revealed one round at a time.
-- The server does not trust raw client claims.
-- VM results are encrypted and authenticated.
-
-## Limits
-
-- This raises the cost of spoofing; it does not eliminate spoofing.
-- The `demo/` build is for UX only, not security.
-- The security model depends on the full VM + server verification path.
+```bash
+cd server
+pip install -r requirements.txt
+python server.py
+```
 
 ## Formatting
 
@@ -142,7 +143,7 @@ assets.
 pip install black isort
 isort . && black .
 npx prtfm
-clang-format -i wasm/src/*.c wasm/src/*.h
+clang-format -i server/wasm/src/*.c server/wasm/src/*.h
 ```
 
 ## License

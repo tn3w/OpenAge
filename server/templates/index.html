@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>OpenAge Server Example</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                padding: 24px;
+                font-family: 'Segoe UI', sans-serif;
+                background: #0d1117;
+                color: #e5e7eb;
+            }
+
+            .card {
+                width: min(100%, 560px);
+                padding: 32px;
+                border: 1px solid #30363d;
+                border-radius: 18px;
+                background: #161b22;
+            }
+
+            h1 {
+                margin: 0 0 12px;
+                font-size: 1.6rem;
+            }
+
+            p {
+                margin: 0 0 24px;
+                line-height: 1.5;
+                color: #9ca3af;
+            }
+
+            .widget-slot {
+                display: flex;
+                justify-content: center;
+                margin-bottom: 24px;
+            }
+
+            #result {
+                min-height: 1.5rem;
+                font-size: 0.95rem;
+            }
+
+            #result.pass {
+                color: #4ade80;
+            }
+
+            #result.fail {
+                color: #f87171;
+            }
+
+            .verify {
+                display: none;
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid #30363d;
+            }
+
+            .steps {
+                display: grid;
+                gap: 8px;
+                margin-bottom: 12px;
+                color: #9ca3af;
+                font-size: 0.9rem;
+            }
+
+            pre {
+                margin: 0;
+                padding: 14px;
+                overflow: auto;
+                border-radius: 10px;
+                background: #0d1117;
+                border: 1px solid #30363d;
+                color: #cbd5e1;
+                font-size: 0.82rem;
+            }
+        </style>
+    </head>
+    <body>
+        <main class="card">
+            <h1>Age Verification</h1>
+            <p>
+                The widget runs the wasm-backed flow, the server signs the response token, and this
+                page verifies that token with the server secret.
+            </p>
+
+            <div class="widget-slot">
+                <div
+                    class="openage"
+                    data-mode="custom"
+                    data-sitekey="{{ sitekey }}"
+                    data-server=""
+                    data-callback="onVerified"
+                    data-error-callback="onError"
+                ></div>
+            </div>
+
+            <div id="result"></div>
+
+            <section id="verify" class="verify">
+                <div id="steps" class="steps"></div>
+                <pre id="output"></pre>
+            </section>
+        </main>
+
+        <script>
+            const secret = '{{ secret_key }}';
+
+            function setResult(message, className) {
+                const element = document.getElementById('result');
+                element.textContent = message;
+                element.className = className || '';
+            }
+
+            function setSteps(items) {
+                const steps = document.getElementById('steps');
+                steps.innerHTML = '';
+
+                for (const item of items) {
+                    const line = document.createElement('div');
+                    line.textContent = item;
+                    steps.appendChild(line);
+                }
+            }
+
+            async function onVerified(token) {
+                if (!token) {
+                    setResult('Verified but no token was returned.', 'pass');
+                    return;
+                }
+
+                setResult('Widget verified. Checking token on the server...', 'pass');
+                document.getElementById('verify').style.display = 'block';
+                setSteps([
+                    '1. Received signed response token from the widget.',
+                    '2. Posting token to /api/token/verify.',
+                ]);
+
+                try {
+                    const response = await fetch('/api/token/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ secret, token }),
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        setResult(
+                            `Server accepted token. Estimated age: ${data.estimatedAge}.`,
+                            'pass'
+                        );
+                        setSteps([
+                            '1. Received signed response token from the widget.',
+                            '2. Posted token to /api/token/verify.',
+                            '3. Server accepted the token and returned the verified payload.',
+                        ]);
+                    } else {
+                        setResult('Server rejected the token.', 'fail');
+                        setSteps([
+                            '1. Received signed response token from the widget.',
+                            '2. Posted token to /api/token/verify.',
+                            '3. Server rejected the token.',
+                        ]);
+                    }
+
+                    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+                } catch (error) {
+                    setResult(`Token verification failed: ${error.message}`, 'fail');
+                    document.getElementById('output').textContent = error.message;
+                }
+            }
+
+            function onError(error) {
+                setResult(`Error: ${error || 'Unknown'}`, 'fail');
+            }
+        </script>
+        <script src="/dist/openage.umd.js"></script>
+    </body>
+</html>

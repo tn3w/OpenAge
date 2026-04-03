@@ -1,12 +1,15 @@
-# Byte-compiled / optimized / DLL files
+node_modules/
+dist/
+*.log
+.DS_Store
+coverage/
+.env
+
+# Python (server)
 __pycache__/
 *.py[codz]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -206,4 +209,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-static/vm
+server/wasm/web

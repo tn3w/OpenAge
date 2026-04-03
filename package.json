@@ -1,0 +1,53 @@
+{
+    "name": "openage",
+    "version": "1.0.0",
+    "description": "Privacy-first age verification widget. On-device face analysis with liveness detection.",
+    "type": "module",
+    "main": "dist/openage.umd.js",
+    "module": "dist/openage.esm.js",
+    "browser": "dist/openage.min.js",
+    "unpkg": "dist/openage.min.js",
+    "jsdelivr": "dist/openage.min.js",
+    "types": "src/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/openage.esm.js",
+            "require": "./dist/openage.umd.js",
+            "types": "./src/index.d.ts"
+        }
+    },
+    "files": [
+        "dist/",
+        "src/"
+    ],
+    "scripts": {
+        "build": "rollup -c",
+        "dev": "rollup -c -w",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "eslint src/",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "age-verification",
+        "age-gate",
+        "liveness",
+        "face-detection",
+        "privacy",
+        "on-device",
+        "widget",
+        "captcha"
+    ],
+    "author": "tn3w",
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tn3w/OpenAge"
+    },
+    "devDependencies": {
+        "@rollup/plugin-terser": "^1.0.0",
+        "jsdom": "^25.0.1",
+        "rollup": "^4.28.0",
+        "vitest": "^4.1.2"
+    }
+}

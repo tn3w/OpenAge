@@ -1,0 +1,11 @@
+server/
+test/
+demo/
+coverage/
+.github/
+.gitignore
+.env
+*.log
+CLAUDE.md
+rollup.config.js
+vitest.config.js
