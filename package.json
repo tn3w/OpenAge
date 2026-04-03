@@ -1,6 +1,6 @@
 {
     "name": "@tn3w/openage",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Privacy-first age verification widget. On-device face analysis with liveness detection.",
     "type": "module",
     "main": "dist/openage.umd.js",
