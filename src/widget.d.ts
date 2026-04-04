@@ -46,6 +46,7 @@ export declare class Widget {
     message: string
   ): void;
   showError(message: string): void;
+  setErrorCountdown(seconds: number): void;
   clearError(): void;
   setState(state: string): void;
   getToken(): string | null;

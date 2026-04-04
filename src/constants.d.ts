@@ -8,6 +8,7 @@ export declare const FACEAPI_MODEL_CDN: string;
 export declare const DEFAULT_MIN_AGE: number;
 export declare const FAIL_FLOOR: number;
 export declare const MAX_RETRIES: number;
+export declare const ERROR_STEP_SECONDS: number;
 export declare const BURST_FRAMES: number;
 export declare const BURST_INTERVAL_MS: number;
 export declare const POSITION_CHECK_MS: number;

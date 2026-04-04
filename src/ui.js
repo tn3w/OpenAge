@@ -893,6 +893,52 @@ export const STYLES = `
 .oa-result-fail { color: var(--oa-danger); }
 .oa-result-retry { color: var(--oa-warn); }
 
+.oa-error-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 2rem 1.2rem;
+  background: var(--oa-surface);
+  border: 1px solid var(--oa-border);
+  border-radius: var(--oa-radius);
+  margin: 10px;
+  animation: oa-fade-in 0.4s ease;
+  text-align: center;
+}
+
+.oa-error-step-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--oa-danger);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.oa-error-step-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--oa-text);
+}
+
+.oa-error-step-message {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--oa-text-muted);
+  max-width: 260px;
+}
+
+.oa-error-step-countdown {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--oa-danger);
+}
+
 .oa-hidden { display: none !important; }
 
 /* ── Animations ──────────────────────────────── */
@@ -1015,6 +1061,17 @@ export function challengeTemplate() {
       <div class="oa-video-status">
         <p></p>
       </div>
+    </div>
+  `;
+}
+
+export function errorStepTemplate(message) {
+    return `
+    <div class="oa-error-step">
+      <div class="oa-error-step-icon">✕</div>
+      <div class="oa-error-step-title">Verification stopped</div>
+      <div class="oa-error-step-message">${message}</div>
+      <div class="oa-error-step-countdown"></div>
     </div>
   `;
 }

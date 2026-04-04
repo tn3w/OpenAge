@@ -27,6 +27,7 @@ import {
 import {
     BURST_FRAMES,
     BURST_INTERVAL_MS,
+    ERROR_STEP_SECONDS,
     MAX_RETRIES,
     MOTION_CAPTURE_MS,
     MOTION_SAMPLE_MS,
@@ -110,6 +111,64 @@ function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+function resolveChallengeErrorMessage(error) {
+    const name = typeof error?.name === 'string' ? error.name : '';
+    const message = typeof error?.message === 'string' ? error.message : String(error || '');
+    const normalized = `${name} ${message}`.toLowerCase();
+
+    if (
+        name === 'NotFoundError' ||
+        /request is not allowed by the user agent or the platform in the current context/.test(
+            normalized
+        ) ||
+        /requested device not found|device not found|no camera|could not start video source/.test(
+            normalized
+        )
+    ) {
+        return 'No camera available. Plug in a camera and try again.';
+    }
+
+    if (
+        name === 'NotAllowedError' ||
+        name === 'PermissionDeniedError' ||
+        /permission|camera access|access denied/.test(normalized)
+    ) {
+        return 'Camera access was blocked. Allow camera access and try again.';
+    }
+
+    if (/positioning timeout/.test(normalized)) {
+        return 'Face positioning timed out. Reopen the check and try again.';
+    }
+
+    return 'Verification failed. Please try again.';
+}
+
+async function showErrorStep(widget, error) {
+    const message = resolveChallengeErrorMessage(error);
+
+    if (!widget.popup) {
+        widget.openPopup?.();
+    }
+
+    widget.showError?.(message);
+
+    for (let seconds = ERROR_STEP_SECONDS; seconds > 0; seconds--) {
+        if (!widget.popup) break;
+        widget.setErrorCountdown?.(seconds);
+        await sleep(1000);
+    }
+
+    widget.closePopup?.();
+    widget.setState?.('retry');
+}
+
+async function handleChallengeError(widget, emitter, error) {
+    console.log('Error during challenge:', error);
+    await showErrorStep(widget, error);
+    emitter.emit('error', error, widget.id);
+    widget.params.errorCallback?.(error);
+}
+
 export async function runChallenge(widget, emitter) {
     const mode = widget.params.mode || 'serverless';
 
@@ -190,10 +249,7 @@ async function runServerless(widget, emitter) {
         emitResult(widget, emitter, result);
     } catch (error) {
         cleanupLocal();
-        console.log('Error during challenge:', error);
-        widget.showResult('fail', 'Verification failed');
-        emitter.emit('error', error, widget.id);
-        params.errorCallback?.(error);
+        await handleChallengeError(widget, emitter, error);
     }
 }
 
@@ -324,11 +380,8 @@ async function runServer(widget, emitter) {
 
         cleanupVM(transport);
     } catch (error) {
-        console.log('Error during challenge:', error);
         cleanupVM();
-        widget.showResult('fail', 'Verification failed');
-        emitter.emit('error', error, widget.id);
-        params.errorCallback?.(error);
+        await handleChallengeError(widget, emitter, error);
     }
 }
 

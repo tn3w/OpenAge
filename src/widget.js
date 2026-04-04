@@ -3,6 +3,7 @@ import {
     checkboxTemplate,
     heroTemplate,
     challengeTemplate,
+    errorStepTemplate,
     resultTemplate,
     resolveTheme,
     watchTheme,
@@ -476,8 +477,20 @@ export class Widget {
         }
     }
 
-    showError() {
-        this.setState('retry');
+    showError(message) {
+        if (!this.popupElements?.body) return;
+
+        this.popupElements.body.innerHTML = errorStepTemplate(message);
+        this.popupElements.errorCountdown =
+            this.popupElements.body.querySelector('.oa-error-step-countdown');
+        this.hideActions();
+    }
+
+    setErrorCountdown(seconds) {
+        if (!this.popupElements?.errorCountdown) return;
+
+        const unit = seconds === 1 ? 'second' : 'seconds';
+        this.popupElements.errorCountdown.textContent = `Closing in ${seconds} ${unit}…`;
     }
 
     clearError() {

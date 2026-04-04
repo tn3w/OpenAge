@@ -17,6 +17,10 @@ export declare function heroTemplate(
 
 export declare function challengeTemplate(): string;
 
+export declare function errorStepTemplate(
+  message: string
+): string;
+
 export declare function resultTemplate(
   outcome: "fail" | "retry",
   message: string

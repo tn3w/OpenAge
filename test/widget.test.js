@@ -155,6 +155,38 @@ describe('Widget', () => {
         expect(widget.popup.root.dataset.placement).toBe('below');
     });
 
+    it('renders popup error step with countdown text', () => {
+        Object.defineProperty(window, 'innerWidth', {
+            configurable: true,
+            value: 900,
+        });
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            value: 900,
+        });
+
+        const widget = new Widget(container, {});
+        setRect(widget.elements.checkbox, {
+            top: 100,
+            right: 320,
+            bottom: 140,
+            left: 200,
+            width: 120,
+            height: 40,
+        });
+
+        widget.openPopup();
+        widget.showError('No camera available. Plug in a camera and try again.');
+        widget.setErrorCountdown(5);
+
+        expect(widget.popupElements.body.textContent).toContain('Verification stopped');
+        expect(widget.popupElements.body.textContent).toContain(
+            'No camera available. Plug in a camera and try again.'
+        );
+        expect(widget.popupElements.body.textContent).toContain('Closing in 5 seconds');
+        expect(widget.popupElements.actions.classList.contains('oa-hidden')).toBe(true);
+    });
+
     it('updates popup position after reflow events', async () => {
         Object.defineProperty(window, 'innerWidth', {
             configurable: true,

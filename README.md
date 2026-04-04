@@ -95,6 +95,10 @@ OpenAge.execute(widgetId);
 await OpenAge.challenge(params);
 ```
 
+Runtime errors keep the popup open long enough to explain what happened.
+If no camera is available, OpenAge tells the user to plug one in and closes
+the popup automatically after 5 seconds.
+
 ## Main Params
 
 | Param     | Values                            |
