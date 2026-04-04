@@ -541,6 +541,20 @@ export const STYLES = `
   flex-direction: column;
 }
 
+.oa-inline-shell {
+  background: var(--oa-bg);
+  border: 1px solid var(--oa-border);
+  border-radius: var(--oa-radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18),
+    0 0 0 1px rgba(0,0,0,0.06);
+  width: min(100%, 360px);
+  max-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+}
+
 .oa-modal-overlay {
   position: fixed;
   inset: 0;

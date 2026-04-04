@@ -143,8 +143,17 @@ function resolveChallengeErrorMessage(error) {
     return 'Verification failed. Please try again.';
 }
 
+function isInlineLayout(widget) {
+    return widget?.params?.layout === 'inline';
+}
+
 async function showErrorStep(widget, error) {
     const message = resolveChallengeErrorMessage(error);
+
+    if (isInlineLayout(widget)) {
+        widget.showResult?.('retry', message);
+        return;
+    }
 
     if (!widget.popup) {
         widget.openPopup?.();
@@ -198,10 +207,14 @@ async function runServerless(widget, emitter) {
         await Promise.all([loadVision(), initAgeEstimator()]);
 
         modelBuffer = await loadModel();
-        widget.showReady();
 
-        await waitForStart(widget);
-        await startCameraFlow(widget, modelBuffer);
+        if (isInlineLayout(widget)) {
+            await startCameraFlow(widget, modelBuffer);
+        } else {
+            widget.showReady();
+            await waitForStart(widget);
+            await startCameraFlow(widget, modelBuffer);
+        }
 
         const transport = createTransport('serverless', params);
 
@@ -290,10 +303,16 @@ async function runServer(widget, emitter) {
             captureFrame: () => (captureFrame() ? 'true' : 'null'),
         });
 
-        widget.showReady();
-        await waitForStart(widget);
+        let video;
 
-        const video = widget.showCamera();
+        if (isInlineLayout(widget)) {
+            video = widget.showCamera();
+        } else {
+            widget.showReady();
+            await waitForStart(widget);
+            video = widget.showCamera();
+        }
+
         widget.setVideoStatus('Requesting camera…');
         await startCamera(video);
         exposeMirrorVideo(video);

@@ -94,6 +94,22 @@ describe('index', () => {
         expect(id.startsWith('oa-')).toBe(true);
     });
 
+    it('render auto-starts inline layout', async () => {
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        OpenAge.render(container, {
+            mode: 'serverless',
+            layout: 'inline',
+        });
+
+        const challenge = await import('../src/challenge.js');
+
+        expect(createdWidgets).toHaveLength(1);
+        expect(createdWidgets[0].params.layout).toBe('inline');
+        expect(challenge.runChallenge).toHaveBeenCalledTimes(1);
+    });
+
     it('remove cleans up widget', () => {
         const container = document.createElement('div');
         document.body.appendChild(container);

@@ -27,6 +27,7 @@ export class Widget {
         this.popup = null;
         this.shadow = null;
         this.elements = {};
+        this.popupElements = null;
         this.onChallenge = null;
         this.onStartClick = null;
         this.popupFrame = 0;
@@ -39,6 +40,7 @@ export class Widget {
         const host = document.createElement('div');
         host.id = this.id;
         this.shadow = host.attachShadow({ mode: 'open' });
+        this.host = host;
 
         const style = document.createElement('style');
         style.textContent = STYLES;
@@ -51,7 +53,12 @@ export class Widget {
         if (this.params.size === 'invisible') {
             host.style.display = 'none';
             this.container.appendChild(host);
-            this.host = host;
+            return;
+        }
+
+        if (this.isInlineLayout()) {
+            this.renderInlineShell();
+            this.container.appendChild(host);
             return;
         }
 
@@ -87,7 +94,32 @@ export class Widget {
         this.elements.errorSlot = this.shadow.querySelector('.oa-error-slot');
 
         this.container.appendChild(host);
-        this.host = host;
+    }
+
+    isInlineLayout() {
+        return this.params.layout === 'inline';
+    }
+
+    renderInlineShell() {
+        const inlineShell = document.createElement('div');
+        inlineShell.className = 'oa-inline-shell';
+        inlineShell.innerHTML = this.buildPopupContent({ closeable: false });
+        this.shadow.appendChild(inlineShell);
+
+        this.popup = {
+            host: this.host,
+            root: inlineShell,
+            inline: true,
+        };
+
+        this.bindPopupEvents(inlineShell);
+    }
+
+    resetInlineShell() {
+        if (!this.popup?.root) return;
+
+        this.popup.root.innerHTML = this.buildPopupContent({ closeable: false });
+        this.bindPopupEvents(this.popup.root);
     }
 
     startChallenge() {
@@ -120,6 +152,14 @@ export class Widget {
     }
 
     openPopup() {
+        if (this.isInlineLayout()) {
+            if (!this.popup) {
+                this.renderInlineShell();
+            }
+
+            return this.getVideo();
+        }
+
         if (this.popup) return this.getVideo();
 
         const anchor = this.getPopupAnchor();
@@ -297,7 +337,7 @@ export class Widget {
         this.popup.root.style.pointerEvents = 'auto';
     }
 
-    buildPopupContent() {
+    buildPopupContent({ closeable = true } = {}) {
         return `
       <div class="oa-header">
         <div class="oa-title">
@@ -308,10 +348,14 @@ export class Widget {
           </a>
           <span class="oa-badge">on-device</span>
         </div>
-        <button class="oa-close-btn"
-          aria-label="Close">
-          ${CLOSE_SVG}
-        </button>
+                ${
+                    closeable
+                        ? `<button class="oa-close-btn"
+                    aria-label="Close">
+                    ${CLOSE_SVG}
+                </button>`
+                        : ''
+                }
       </div>
       <div class="oa-body">
         ${heroTemplate('Initializing…')}
@@ -324,7 +368,7 @@ export class Widget {
     `;
     }
 
-    bindPopupEvents(root, shadow) {
+    bindPopupEvents(root) {
         const closeBtn = root.querySelector('.oa-close-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
@@ -442,6 +486,22 @@ export class Widget {
     }
 
     showResult(outcome, message) {
+        if (this.isInlineLayout()) {
+            if (!this.popupElements?.body) return;
+
+            this.popupElements.body.innerHTML = resultTemplate(outcome, message);
+            this.hideActions();
+
+            if (outcome === 'pass') {
+                this.setState('verified');
+                return;
+            }
+
+            this.setState(outcome === 'fail' ? 'failed' : 'retry');
+            this.showActions('Try Again');
+            return;
+        }
+
         if (outcome === 'pass') {
             this.closePopup();
             this.setState('verified');
@@ -481,8 +541,9 @@ export class Widget {
         if (!this.popupElements?.body) return;
 
         this.popupElements.body.innerHTML = errorStepTemplate(message);
-        this.popupElements.errorCountdown =
-            this.popupElements.body.querySelector('.oa-error-step-countdown');
+        this.popupElements.errorCountdown = this.popupElements.body.querySelector(
+            '.oa-error-step-countdown'
+        );
         this.hideActions();
     }
 
@@ -501,6 +562,22 @@ export class Widget {
 
     closePopup() {
         if (!this.popup) return;
+
+        if (this.popup.inline) {
+            this.popup.cleanup?.();
+            if (this.popupFrame) {
+                cancelAnimationFrame(this.popupFrame);
+                this.popupFrame = 0;
+            }
+            this.resetInlineShell();
+
+            if (this.state === 'loading') {
+                this.setState('idle');
+            }
+
+            return;
+        }
+
         this.popup.cleanup?.();
         this.popup.themeCleanup?.();
         this.popup.host.remove();

@@ -82,6 +82,7 @@ declare global {
       sitekey?: string;
       server?: string;
       mode?: "serverless" | "sitekey" | "custom";
+      layout?: "widget" | "inline" | "embed" | "embedded";
       locale?: string;
       theme?: "light" | "dark" | "auto";
       render?: "explicit";

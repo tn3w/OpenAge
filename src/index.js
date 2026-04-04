@@ -52,8 +52,19 @@ export class EventEmitter {
 const emitter = new EventEmitter();
 const widgets = new Map();
 
+function normalizeLayout(layout) {
+    if (layout === 'inline' || layout === 'embed' || layout === 'embedded') {
+        return 'inline';
+    }
+
+    return 'widget';
+}
+
 function normalizeParams(params) {
     const globalConfig = typeof window !== 'undefined' ? window.openage || {} : {};
+    const layout = normalizeLayout(
+        params.layout ?? params.display ?? globalConfig.layout ?? globalConfig.display
+    );
 
     return {
         mode: 'serverless',
@@ -62,6 +73,7 @@ function normalizeParams(params) {
         minAge: 18,
         ...globalConfig,
         ...params,
+        layout,
     };
 }
 
@@ -70,6 +82,10 @@ function startWidget(widget) {
         emitter.emit('opened', widget.id);
         runChallenge(widget, emitter);
     };
+
+    if (widget.params.layout === 'inline') {
+        widget.startChallenge();
+    }
 }
 
 function render(container, params = {}) {
@@ -218,6 +234,7 @@ function autoRender() {
             size: element.dataset.size,
             action: element.dataset.action,
             mode: element.dataset.mode,
+            layout: element.dataset.layout || element.dataset.display,
             server: element.dataset.server,
         };
 

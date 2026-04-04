@@ -2,6 +2,7 @@ export interface WidgetParams {
   sitekey?: string;
   server?: string;
   mode?: "serverless" | "sitekey" | "custom";
+  layout?: "widget" | "inline" | "embed" | "embedded";
   theme?: "light" | "dark" | "auto";
   size?: "compact" | "normal" | "invisible";
   action?: string;

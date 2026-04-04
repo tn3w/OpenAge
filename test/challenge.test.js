@@ -173,11 +173,74 @@ describe('challenge module', () => {
         expect(widget.showError).toHaveBeenCalledWith(
             'No camera available. Plug in a camera and try again.'
         );
-        expect(widget.setErrorCountdown.mock.calls.map(([value]) => value)).toEqual(
-            [5, 4, 3, 2, 1]
-        );
+        expect(widget.setErrorCountdown.mock.calls.map(([value]) => value)).toEqual([
+            5, 4, 3, 2, 1,
+        ]);
         expect(widget.closePopup).toHaveBeenCalledTimes(1);
         expect(widget.setState).toHaveBeenCalledWith('retry');
         expect(errors).toEqual([cameraError]);
+    });
+
+    it('starts inline layout without the ready screen', async () => {
+        vi.useFakeTimers();
+
+        const emitter = new EventEmitter();
+        const cameraError = new DOMException(
+            'The request is not allowed by the user agent or the platform ' +
+                'in the current context.',
+            'NotFoundError'
+        );
+
+        navigator.mediaDevices.getUserMedia.mockRejectedValue(cameraError);
+
+        const widget = {
+            params: { mode: 'serverless', layout: 'inline' },
+            popup: null,
+            popupElements: null,
+            setHeroStatus: vi.fn(),
+            setVideoStatus: vi.fn(),
+            setInstruction: vi.fn(),
+            setProgress: vi.fn(),
+            setTask: vi.fn(),
+            openPopup: vi.fn(),
+            showHero: vi.fn(),
+            showReady: vi.fn(),
+            showCamera: vi.fn(() => ({
+                srcObject: null,
+                videoWidth: 640,
+                videoHeight: 480,
+                play: vi.fn(),
+            })),
+            showLiveness: vi.fn(),
+            showError: vi.fn(),
+            showResult: vi.fn(),
+            showActions: vi.fn(),
+            hideActions: vi.fn(),
+            closePopup: vi.fn(),
+            setErrorCountdown: vi.fn(),
+            setState: vi.fn(),
+            onStartClick: null,
+        };
+
+        widget.openPopup.mockImplementation(() => {
+            widget.popup = { root: {}, inline: true };
+            widget.popupElements = {};
+        });
+
+        const runPromise = runChallenge(widget, emitter);
+
+        await Promise.resolve();
+        await vi.runAllTimersAsync();
+        await runPromise;
+
+        expect(widget.showReady).not.toHaveBeenCalled();
+        expect(widget.showCamera).toHaveBeenCalledTimes(1);
+        expect(widget.showError).not.toHaveBeenCalled();
+        expect(widget.setErrorCountdown).not.toHaveBeenCalled();
+        expect(widget.showResult).toHaveBeenCalledWith(
+            'retry',
+            'No camera available. Plug in a camera and try again.'
+        );
+        expect(widget.closePopup).not.toHaveBeenCalled();
     });
 });

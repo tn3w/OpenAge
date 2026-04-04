@@ -61,6 +61,15 @@ describe('Widget', () => {
         expect(widget.host.style.display).toBe('none');
     });
 
+    it('renders inline layout without the checkbox shell', () => {
+        const widget = new Widget(container, {
+            layout: 'inline',
+        });
+
+        expect(widget.shadow.querySelector('.oa-inline-shell')).toBeTruthy();
+        expect(widget.shadow.querySelector('.oa-checkbox')).toBeNull();
+    });
+
     it('reset returns to idle', () => {
         const widget = new Widget(container, {});
         widget.setState('verified');
@@ -125,6 +134,18 @@ describe('Widget', () => {
 
         expect(widget.popup).toBeNull();
         expect(widget.state).toBe('retry');
+    });
+
+    it('inline widget keeps the result visible after a pass', () => {
+        const widget = new Widget(container, {
+            layout: 'inline',
+        });
+
+        widget.showResult('pass', 'Verified');
+
+        expect(widget.popup).toBeTruthy();
+        expect(widget.popup.root.textContent).toContain('Verified');
+        expect(widget.state).toBe('verified');
     });
 
     it('anchors popup below the checkbox', () => {

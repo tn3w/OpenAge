@@ -16,17 +16,22 @@
                 min-height: 100vh;
                 display: grid;
                 place-items: center;
+                padding: 24px;
+            }
+
+            #openage-demo {
+                width: min(100%, 360px);
             }
         </style>
     </head>
     <body>
         <div id="openage-demo"></div>
 
-        <script src="https://cdn.jsdelivr.net/npm/@tn3w/openage/dist/openage.min.js"></script>
+        <script src="../dist/openage.min.js"></script>
         <script>
             OpenAge.render('#openage-demo', {
                 mode: 'serverless',
-                size: 'normal',
+                layout: 'inline',
                 minAge: 18,
             });
         </script>

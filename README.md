@@ -16,11 +16,11 @@ button binding.
 
 ## At a Glance
 
-| Browser-side            | Server-backed              | UI                         |
-| ----------------------- | -------------------------- | -------------------------- |
-| On-device face analysis | Optional WASM verification | Embedded widget + popup    |
-| No raw camera upload    | Signed sessions and tokens | Normal, compact, invisible |
-| Serverless soft gates   | Hosted or custom backend   | Auto, light, dark          |
+| Browser-side            | Server-backed              | UI                               |
+| ----------------------- | -------------------------- | -------------------------------- |
+| On-device face analysis | Optional WASM verification | Widget popup, inline embed, bind |
+| No raw camera upload    | Signed sessions and tokens | Normal, compact, invisible       |
+| Serverless soft gates   | Hosted or custom backend   | Auto, light, dark                |
 
 ## Install
 
@@ -54,11 +54,26 @@ import OpenAge from '@tn3w/openage';
 
 OpenAge.render('#gate', {
     mode: 'serverless',
+    layout: 'inline',
     minAge: 18,
     callback: (token) => console.log(token),
     errorCallback: (error) => console.error(error),
 });
 ```
+
+### Inline Embed
+
+```js
+OpenAge.render('#gate', {
+    mode: 'serverless',
+    layout: 'inline',
+    minAge: 18,
+});
+```
+
+`layout: 'inline'` removes the checkbox shell and renders the verification
+panel directly in the container. The first verification step starts
+immediately after loading.
 
 ### Bound Flow
 
@@ -104,6 +119,7 @@ the popup automatically after 5 seconds.
 | Param     | Values                            |
 | --------- | --------------------------------- |
 | `mode`    | `serverless`, `sitekey`, `custom` |
+| `layout`  | `widget`, `inline`                |
 | `theme`   | `light`, `dark`, `auto`           |
 | `size`    | `normal`, `compact`, `invisible`  |
 | `minAge`  | number, default `18`              |
@@ -122,7 +138,7 @@ python server.py
 ```
 
 The repository also includes `demo/`, a minimal GitHub Pages build that loads
-the jsDelivr bundle for `@tn3w/openage` in embedded `serverless` mode.
+the jsDelivr bundle for `@tn3w/openage` in inline embedded `serverless` mode.
 
 ## Development
 
