@@ -190,6 +190,7 @@ async function runServerless(widget, emitter) {
         emitResult(widget, emitter, result);
     } catch (error) {
         cleanupLocal();
+        console.log('Error during challenge:', error);
         widget.showResult('fail', 'Verification failed');
         emitter.emit('error', error, widget.id);
         params.errorCallback?.(error);
@@ -323,6 +324,7 @@ async function runServer(widget, emitter) {
 
         cleanupVM(transport);
     } catch (error) {
+        console.log('Error during challenge:', error);
         cleanupVM();
         widget.showResult('fail', 'Verification failed');
         emitter.emit('error', error, widget.id);
