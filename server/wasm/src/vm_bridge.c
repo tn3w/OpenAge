@@ -23,7 +23,7 @@ static int g_model_ready;
 #define MAGIC_RESP 0x564d5250
 #define NONCE_LEN 12
 #define MAC_LEN 32
-#define MIN_BRIGHTNESS 55.0f
+#define MIN_BRIGHTNESS 80.0f
 #define MAX_BRIGHTNESS 205.0f
 #define MIN_CONTRAST 20.0f
 #define MIN_SHARPNESS 3.0f

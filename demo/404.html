@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>404 — OpenAge</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Space+Mono&display=swap');
+
+            :root {
+                --bg: #0b0d11;
+                --surface: #14161d;
+                --border: #1f2230;
+                --text: #e8e8ed;
+                --text-muted: #7a7d8c;
+                --accent: #4ae68a;
+                --radius: 16px;
+                --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+                --mono: 'Space Mono', monospace;
+            }
+
+            @media (prefers-color-scheme: light) {
+                :root {
+                    --bg: #f8f9fb;
+                    --surface: #ffffff;
+                    --border: #e2e4ea;
+                    --text: #1a1c24;
+                    --text-muted: #6b6e7b;
+                    --accent: #22c55e;
+                }
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            html,
+            body {
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font-family: var(--font);
+            }
+
+            body {
+                display: grid;
+                place-items: center;
+                min-height: 100vh;
+                padding: 24px;
+            }
+
+            .card {
+                text-align: center;
+                width: 100%;
+                animation: fade-in 0.4s ease;
+            }
+
+            .face-wrap {
+                width: 80px;
+                height: 96px;
+                margin: 0 auto 36px;
+                color: var(--text-muted);
+            }
+
+            .face-wrap svg {
+                width: 100%;
+                height: 100%;
+                animation: breathe 4s ease-in-out infinite;
+            }
+
+            .face-wrap .eye {
+                transform-box: fill-box;
+                transform-origin: center;
+                animation: idle-blink 5s ease-in-out infinite;
+            }
+
+            .code {
+                font-family: var(--mono);
+                font-size: 16px;
+                color: var(--accent);
+                margin-bottom: 12px;
+                letter-spacing: 0.05em;
+            }
+
+            h1 {
+                font-size: 28px;
+                font-weight: 500;
+                margin-bottom: 12px;
+            }
+
+            p {
+                font-size: 17px;
+                color: var(--text-muted);
+                line-height: 1.6;
+                margin-bottom: 36px;
+            }
+
+            a {
+                display: inline-block;
+                background: var(--accent);
+                color: var(--bg);
+                font-family: var(--font);
+                font-size: 16px;
+                font-weight: 500;
+                text-decoration: none;
+                padding: 13px 32px;
+                border-radius: 10px;
+            }
+
+            @keyframes breathe {
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.04);
+                }
+            }
+
+            @keyframes idle-blink {
+                0%,
+                42%,
+                48%,
+                100% {
+                    transform: scaleY(1);
+                }
+                44%,
+                46% {
+                    transform: scaleY(0.05);
+                }
+            }
+
+            @keyframes fade-in {
+                from {
+                    opacity: 0;
+                    transform: translateY(6px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="face-wrap">
+                <svg viewBox="0 0 100 120" fill="none">
+                    <ellipse
+                        cx="50"
+                        cy="55"
+                        rx="35"
+                        ry="45"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                    />
+                    <ellipse cx="36" cy="45" rx="5" ry="3.5" fill="currentColor" class="eye" />
+                    <ellipse cx="64" cy="45" rx="5" ry="3.5" fill="currentColor" class="eye" />
+                    <line
+                        x1="50"
+                        y1="52"
+                        x2="48"
+                        y2="62"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                    />
+                    <path
+                        d="M40 72 Q50 74 60 72"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        fill="none"
+                    />
+                </svg>
+            </div>
+            <div class="code">404</div>
+            <h1>Page not found</h1>
+            <p>This page doesn't exist or has been moved.</p>
+            <a href="./">Go to demo</a>
+        </div>
+    </body>
+</html>

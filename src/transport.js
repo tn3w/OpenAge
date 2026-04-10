@@ -98,6 +98,10 @@ function createServerlessTransport(options) {
                 return { success: false, token: null };
             }
 
+            if (options.minAge != null && estimatedAge < options.minAge) {
+                return { success: false, token: null };
+            }
+
             const token = await createToken({
                 estimatedAge,
                 livenessOk: true,

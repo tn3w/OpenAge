@@ -211,10 +211,5 @@ export function isSuspicious(history) {
         deltas.push(dy + dp);
     }
 
-    if (deltas.every((d) => d < 0.1)) return true;
-
-    const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
-    const variance = deltas.reduce((s, d) => s + (d - mean) ** 2, 0) / deltas.length;
-
-    return variance < 0.01 && mean > 0.5;
+    return deltas.every((d) => d < 0.1);
 }

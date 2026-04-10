@@ -209,11 +209,11 @@ async function runServerless(widget, emitter) {
         modelBuffer = await loadModel();
 
         if (isInlineLayout(widget)) {
-            await startCameraFlow(widget, modelBuffer);
+            await startCameraWithRetry(widget, modelBuffer);
         } else {
             widget.showReady();
             await waitForStart(widget);
-            await startCameraFlow(widget, modelBuffer);
+            await startCameraWithRetry(widget, modelBuffer);
         }
 
         const transport = createTransport('serverless', params);
@@ -245,6 +245,7 @@ async function runServerless(widget, emitter) {
             return {
                 outcome: result.token ? 'pass' : 'fail',
                 token: result.token,
+                estimatedAge,
             };
         };
 
@@ -254,7 +255,7 @@ async function runServerless(widget, emitter) {
             retryCount++;
             widget.showResult('retry', 'Please try again');
             await waitForStart(widget);
-            await startCameraFlow(widget, modelBuffer);
+            await startCameraWithRetry(widget, modelBuffer);
             result = await attempt();
         }
 
@@ -449,13 +450,18 @@ async function captureMotion(widget) {
 function emitResult(widget, emitter, result) {
     const params = widget.params;
 
+    const debugAge =
+        params.debug && result.estimatedAge != null
+            ? ` (age: ${result.estimatedAge.toFixed(2)}, min: ${params.minAge ?? '?'})`
+            : '';
+
     if (result.outcome === 'pass') {
         widget.token = result.token || null;
-        widget.showResult('pass', 'Verified');
+        widget.showResult('pass', `Verified${debugAge}`);
         emitter.emit('verified', result.token, widget.id);
         params.callback?.(result.token);
     } else {
-        widget.showResult('fail', 'Verification failed');
+        widget.showResult('fail', `Verification failed${debugAge}`);
         emitter.emit('error', 'failed', widget.id);
         params.errorCallback?.('failed');
     }
@@ -468,6 +474,19 @@ function waitForStart(widget) {
             resolve();
         };
     });
+}
+
+async function startCameraWithRetry(widget, modelBuffer) {
+    while (true) {
+        try {
+            await startCameraFlow(widget, modelBuffer);
+            return;
+        } catch (error) {
+            if (!isInlineLayout(widget)) throw error;
+            widget.showResult('retry', resolveChallengeErrorMessage(error));
+            await waitForStart(widget);
+        }
+    }
 }
 
 async function startCameraFlow(widget, modelBuffer) {

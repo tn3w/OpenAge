@@ -25,6 +25,7 @@ export const MOTION_CAPTURE_MS = 3000;
 export const MOTION_SAMPLE_MS = 100;
 export const TOKEN_EXPIRY_S = 300;
 export const STABLE_FRAMES_REQUIRED = 10;
+export const MIN_BRIGHTNESS = 80;
 
 export const TASK_TIMEOUT_MS = 8000;
 export const MIN_TASK_TIME_MS = 500;

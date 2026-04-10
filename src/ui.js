@@ -1092,10 +1092,12 @@ export function errorStepTemplate(message) {
 
 export function resultTemplate(outcome, message) {
     const icons = {
+        pass: '✓',
         fail: '✕',
         retry: '↻',
     };
     const classes = {
+        pass: 'oa-result-pass',
         fail: 'oa-result-fail',
         retry: 'oa-result-retry',
     };

@@ -26,13 +26,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Assemble demo artifact
+        run: |
+          mkdir -p _site
+          cp -r demo/. _site/
+          cp -r dist _site/dist
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload static demo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./demo
+          path: ./_site
 
       - name: Deploy
         id: deployment

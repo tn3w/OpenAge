@@ -27,12 +27,13 @@
     <body>
         <div id="openage-demo"></div>
 
-        <script src="https://cdn.jsdelivr.net/npm/@tn3w/openage/dist/openage.min.js"></script>
+        <script src="./dist/openage.min.js"></script>
         <script>
             OpenAge.render('#openage-demo', {
                 mode: 'serverless',
                 layout: 'inline',
                 minAge: 18,
+                debug: true,
             });
         </script>
     </body>
